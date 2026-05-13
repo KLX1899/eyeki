@@ -56,3 +56,5 @@ dkms.conf
 
 # binanry
 EyeKi
+eyeki.service
+/debian
