@@ -1,0 +1,12 @@
+[Unit]
+Description=EyeKi background service
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/eyeki --daemon
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

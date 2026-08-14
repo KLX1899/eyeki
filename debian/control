@@ -1,0 +1,27 @@
+Source: eyeki
+Section: utils
+Priority: optional
+Maintainer: KLX1899 <amirmkalaki@gmail.com>
+Build-Depends:
+  debhelper-compat (= 13),
+  libnotify-dev,
+  libsystemd-dev,
+  libgtk-3-dev,
+  pkg-config
+Standards-Version: 4.7.0
+Homepage: https://github.com/KLX1899/eyeki
+Rules-Requires-Root: no
+
+Package: eyeki
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Eye drop reminder daemon for Linux
+ EyeKi is a lightweight daemon that reminds users to use eye drops
+ at configurable intervals. It detects user idle time via systemd-logind
+ and supports both notification and full-screen popup modes.
+ .
+ Features:
+  - Configurable reminder intervals
+  - Two display modes: notification or GTK popup
+  - Wayland compatible
+  - Systemd user service integration

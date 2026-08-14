@@ -54,7 +54,8 @@ dkms.conf
 # debug information files
 *.dwo
 
-# binanry
-EyeKi
-eyeki.service
-/debian
+# Project build outputs and generated release archives
+/EyeKi
+/eyeki
+/*.orig.tar.gz
+/package-root/

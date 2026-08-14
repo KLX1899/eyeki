@@ -1,0 +1,9 @@
+eyeki (1.0.0-1) unstable; urgency=low
+
+  * Initial release
+  * Eye drop reminder with notification and popup modes
+  * Systemd user service integration
+  * Configurable interval via CLI and config file
+  * Wayland support with idle detection
+
+ -- KLX1899 <amirmkalaki@gmail.com>  Sun, 26 Apr 2026 11:32:18 +0330
