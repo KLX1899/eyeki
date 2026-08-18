@@ -1,5 +1,7 @@
 # Release and distribution
 
+The first public-release target is Ubuntu. The intended end-user experience is a single package-manager command that installs EyeKi and resolves runtime dependencies automatically; compiler and development packages are source-build concerns, not end-user prerequisites. Additional Linux distributions, Snap, Flatpak, and macOS are separate later targets.
+
 ## Readiness assessment
 
 EyeKi is not ready for a public binary release or submission to a distribution repository. The source is pre-release, has no automated tests/CI or Git tags, and contains P0 scheduler, persistence, session-selection, popup, and error-handling defects. Packaging work exists but was untracked or ignored at the documentation audit.
@@ -75,6 +77,8 @@ The existing debhelper metadata is a starting point, not a passing package. Befo
 - verify user-service install/enable expectations—packages generally should not surprise-enable per-user services;
 - add tests, hardening flags, watch/upstream metadata as appropriate, and complete long description/claims;
 - test install, upgrade, purge, multi-user behavior, and graphical-session startup.
+
+For the initial Ubuntu goal, a reviewed `.deb` installed with `apt` can resolve declared dependencies, while an Ubuntu repository or PPA can provide the eventual one-command install and normal updates. Publishing that repository is release infrastructure work and must follow clean-build, signing, supported-Ubuntu-version, and upgrade testing requirements.
 
 Repository standards and tooling change; verify current Debian/Ubuntu or target-repository policy externally rather than treating this guide as authoritative submission policy.
 

@@ -14,7 +14,9 @@ EyeKi only provides configurable reminders; the repository contains no clinical 
 - Provides command-line operations to show and change those settings.
 - Includes a systemd user unit and preliminary Debian packaging metadata.
 
-EyeKi currently supports one reminder mode at a time; it cannot show a popup and notification together. The `--daemon` option runs the same foreground loop as starting without arguments—it does not fork or detach.
+Notification and popup are intentionally mutually exclusive modes (XOR), not capabilities intended to be combined. Notification is the gentler prompt; popup is the stronger acknowledgement flow. The `--daemon` option runs the same foreground loop as starting without arguments—it does not fork or detach.
+
+Configuration is intentionally CLI-only. A graphical settings application is not planned.
 
 ## Screenshots
 
@@ -25,9 +27,13 @@ No screenshots are committed yet.
 
 ## Platform support
 
-The implementation is Linux-specific. It requires a graphical desktop session, system D-Bus, and `systemd-logind`. The source uses GTK 3, libnotify, and libsystemd. X11 and Wayland behavior has not been systematically tested; fullscreen and keep-above requests may be compositor-dependent. macOS and Windows are not supported by the current architecture.
+The first public-release target is Ubuntu. The current implementation is Linux-specific and requires a graphical desktop session, system D-Bus, and `systemd-logind`. The source uses GTK 3, libnotify, and libsystemd. X11 and Wayland behavior has not been systematically tested; fullscreen and keep-above requests may be compositor-dependent. Other Linux distributions and macOS are possible later targets but are not currently supported. Windows is not supported by the current architecture.
 
-## Requirements
+## End-user installation goal
+
+The intended Ubuntu release must be ready to use through one package-manager command, with runtime dependencies resolved automatically. End users should not need to install a compiler, development headers, or individual libraries manually. The project does not yet publish such a package, so the commands below are currently developer/source-build instructions rather than the finished installation experience.
+
+## Source-build requirements
 
 - A C compiler and Make
 - `pkg-config`
@@ -71,7 +77,7 @@ interval=60
 mode=popup
 ```
 
-Use a positive whole number of minutes:
+Use a whole number from 10 through 300 minutes (five hours). This is the confirmed product range, although the current prototype does not enforce it yet:
 
 ```sh
 ./eyeki --set-interval 60
@@ -82,9 +88,9 @@ Use a positive whole number of minutes:
 
 `n` selects desktop notifications and `p` selects the fullscreen popup. Settings are stored at `$HOME/.config/eye_reminder/config`; XDG configuration overrides are not supported. The parent `$HOME/.config` directory must already exist or the current save implementation silently fails.
 
-The daemon loads settings at startup and reloads them only when the current interval reaches its trigger point. Consequently, an interval change may not take effect immediately. A mode change from notification to popup while the daemon is running is unsafe because GTK is initialized only when popup mode was selected at startup. Restart EyeKi after changing either setting.
+The intended behavior is that every successful settings change takes effect promptly and resets accumulated active time to zero, after which counting restarts under the new complete configuration. The current prototype does not implement that behavior: it reloads only when the old interval reaches its trigger point, and switching from notification to popup while running is unsafe because GTK is initialized only for popup startup. Restart EyeKi after changing either setting until live reload is fixed.
 
-The popup and notification messages are currently hard-coded in Persian and mention one hour even when a different interval is configured. There is no snooze action, history, simultaneous mode, graphical settings screen, or automatic updater.
+Persian is the initial product language. The current messages are hard-coded and mention one hour even when a different interval is configured; future localization work must separate text from program logic and handle RTL/accessibility before adding other languages or custom text. There is no snooze action, history, combined presentation mode, graphical settings screen, or automatic updater.
 
 ## Troubleshooting
 

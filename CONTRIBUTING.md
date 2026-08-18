@@ -28,9 +28,11 @@ Use [the disposable-home workflow](docs/DEVELOPMENT.md#safe-configuration-valida
 
 ## Branches and commits
 
-Proposed policy:
+Keep `main` as the reviewed, integration-ready branch. Do implementation work on short-lived, focused branches and merge it through reviewed pull requests.
 
 - Branch from the maintainer-designated default branch and keep each branch focused on one concern.
+- Prefer descriptive names such as `fix/interval-validation`, `refactor/scheduler`, `feat/multi-monitor-popup`, or `packaging/ubuntu-deb`.
+- Separate foundational module extraction from behavior changes when practical, so each diff can be tested and reviewed independently.
 - Use short, imperative commit subjects; explain rationale and user-visible effects in the body when needed.
 - Do not mix formatting, generated artifacts, packaging, and behavior changes without a clear dependency.
 - Do not rewrite another contributor's work or commit binaries, local configuration, logs, source archives, or credentials.
