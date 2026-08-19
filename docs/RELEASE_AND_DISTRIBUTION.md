@@ -19,8 +19,8 @@ The Makefile's pkg-config dependency was corrected during the documentation audi
 
 ## Missing or inconsistent release metadata
 
-- No authoritative application version, `--version`, Git tag, release record, or version source.
-- Archive label `1.0` conflicts with preliminary Debian version `1.0.0-1`.
+- The authoritative development version is `0.1.0` in `version.h` and is exposed by `eyeki --version`, but there is no verified release tag or release record yet.
+- The ignored archive labeled `1.0` is stale and must not be treated as a release artifact. Preliminary Debian metadata now maps the development version to unreleased package revision `0.1.0-1`.
 - Debian copyright attribution differs from the root license and contains an abbreviated license stanza; maintainers must reconcile it without rewriting valid legal history.
 - No supported-platform/minimum-version matrix, icon, desktop/AppStream metadata, screenshots, release notes history, changelog tags, SBOM, checksums, signatures, provenance, or asset attribution inventory.
 - No dependency minimum versions or documented third-party license review.
@@ -28,9 +28,9 @@ The Makefile's pkg-config dependency was corrected during the documentation audi
 
 Because EyeKi is primarily a background user service rather than a conventional launcher-driven GUI, desktop/AppStream metadata requirements depend on the chosen repository and presentation model. Verify each target's current policy externally before submission.
 
-## Proposed versioning approach
+## Versioning approach
 
-Use one authoritative SemVer-like upstream version (for example, `0.x.y` while interfaces/behavior are unstable) stored in a single build/source location and exposed by `eyeki --version`. Map it mechanically to package versions such as Debian revisions. Do not retroactively declare the preliminary `1.0`/`1.0.0-1` files released without evidence.
+Use the authoritative SemVer-like upstream version from `version.h`, starting at `0.1.0` while interfaces and behavior are unstable, and expose it through `eyeki --version`. Map it to package versions such as Debian revisions. Do not retroactively declare the preliminary `1.0` archive released without evidence.
 
 Tags should be annotated and protected according to maintainer policy. The changelog should move reviewed entries from `Unreleased` to the exact upstream version/date. Package revisions must not masquerade as upstream versions.
 

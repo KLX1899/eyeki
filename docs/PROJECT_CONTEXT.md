@@ -13,7 +13,7 @@ Likely users are Linux desktop users whose healthcare guidance already tells the
 - The default mode is a GTK 3 fullscreen popup; notification mode uses libnotify.
 - The loop polls every ten seconds and accumulates elapsed wall time when reported idle time is below 60 seconds.
 - Settings persist as `interval=<integer>` and `mode=popup|notification` under `$HOME/.config/eye_reminder/config`.
-- CLI operations are `--help`, `--show-config`, `--set-interval <min>`, `--set-mode n|p`, and `--daemon`.
+- CLI operations are `--help`, `--version`, `--show-config`, `--set-interval <min>`, `--set-mode n|p`, and `--daemon`.
 - systemd-logind supplies idle metadata through system D-Bus.
 - A systemd user unit and preliminary Debian metadata exist locally.
 
@@ -67,6 +67,7 @@ See [Architecture](ARCHITECTURE.md), [Repository audit](REPOSITORY_AUDIT.md), an
 - Persian is the initial product language. Other languages and user-defined reminder text are later work.
 - The first public release target is Ubuntu. Other Linux distributions and macOS require separate future platform work and evidence.
 - The application remains local-only, with no telemetry, cloud synchronization, or persisted activity/reminder history planned.
+- The authoritative upstream development version is `0.1.0`, exposed by `eyeki --version`. It remains unreleased until a verified tag and release artifacts exist; Debian packaging maps it to the unreleased revision `0.1.0-1`.
 - The systemd unit restarts the process on failure.
 - The application is MIT-licensed according to the root `LICENSE` file.
 
@@ -85,7 +86,6 @@ See [Architecture](ARCHITECTURE.md), [Repository audit](REPOSITORY_AUDIT.md), an
 - What should the eventual fallback language be when additional locales are introduced?
 - How should “strong acknowledgement” balance interruption with accessibility and user control? The product wants one fullscreen window per monitor and dismissal through the acknowledgement button, but a normal desktop application cannot reliably or appropriately disable compositor/OS shortcuts such as Super+Tab. Absolute lock-in would require an explicitly managed kiosk session, not ordinary Ubuntu desktop behavior.
 - What maintainer contact and supported-version policy should security documentation publish?
-- Which version is authoritative: the archive's `1.0` label or Debian metadata's `1.0.0-1`?
 
 ## Constraints
 

@@ -21,7 +21,7 @@ The ignore file incorrectly hid the systemd unit and Debian source metadata and 
 | License | Root MIT license is unambiguous; Debian copyright has different attribution and an incomplete MIT stanza | Reconcile before packaging; preserve valid legal attribution/history |
 | Lock files | None; dependencies are native system libraries discovered by `pkg-config` | Expected for this build style, but define/test minimum versions and review advisories |
 | Generated files | Binary and source archive are generated; no generated source/catalogs | Documented as non-editable/non-committable |
-| Versions | No source version/tag; `1.0` archive and `1.0.0-1` Debian metadata conflict | Establish one authoritative pre-release version |
+| Versions | Authoritative development version `0.1.0` exists, but no verified tag/release exists; the ignored `1.0` archive is stale | Keep source, CLI, package revision, tag, and release metadata synchronized |
 | Documentation links | Old README described compile-time configuration and omitted actual behavior/setup | Replaced with source-backed docs; custom link check required until CI exists |
 | Stale files/comments | `install.sh` uses nonexistent uppercase source/binary/unit; Debian claims CLI/Wayland support more strongly than evidence; some source comments overstate fallback/continuous activity | Installer/source left unchanged; claims flagged for focused fixes |
 | Asset attribution | No bundled visual/audio/font assets found | Add inventory/attribution when assets appear |

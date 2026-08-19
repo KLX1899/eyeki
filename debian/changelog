@@ -1,9 +1,7 @@
-eyeki (1.0.0-1) unstable; urgency=low
+eyeki (0.1.0-1) UNRELEASED; urgency=medium
 
-  * Initial release
-  * Eye drop reminder with notification and popup modes
-  * Systemd user service integration
-  * Configurable interval via CLI and config file
-  * Wayland support with idle detection
+  * Prepare the first verifiable upstream pre-release.
+  * Add an authoritative application version and --version command.
+  * Keep preliminary packaging unreleased until build and package checks pass.
 
- -- KLX1899 <amirmkalaki@gmail.com>  Sun, 26 Apr 2026 11:32:18 +0330
+ -- KLX1899 <amirmkalaki@gmail.com>  Wed, 19 Aug 2026 09:38:33 +0330

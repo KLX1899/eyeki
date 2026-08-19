@@ -7,7 +7,8 @@ EyeKi has no verifiable tagged or published release, so no released version can 
 | Version | Security support |
 | --- | --- |
 | Unreleased development branch | Best-effort review only; no response-time commitment |
-| Preliminary `1.0`/`1.0.0-1` artifacts | Not established as released or supported |
+| Development `0.1.0` / Debian `0.1.0-1` | Unreleased; best-effort review only |
+| Stale local `1.0` archive | Not released or supported |
 
 `TODO(maintainer): Define supported release lines after the first verified release.`
 

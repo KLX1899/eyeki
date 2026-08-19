@@ -49,6 +49,7 @@ The preliminary Debian metadata names `libgtk-3-dev`, `libnotify-dev`, `libsyste
 ```sh
 make
 ./eyeki --help
+./eyeki --version
 ./eyeki --show-config
 ./eyeki --daemon
 ```

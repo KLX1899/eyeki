@@ -7,6 +7,7 @@
 #include <libnotify/notify.h>
 #include <gtk/gtk.h>
 #include "config.h"
+#include "version.h"
 
 /* If the user has been idle for longer than this threshold (in seconds),
    their active time accumulation is paused. This prevents counting
@@ -272,6 +273,7 @@ void print_usage(const char *prog) {
     printf("  --set-interval <min>   Set reminder interval in minutes\n");
     printf("  --set-mode <mode>      Set mode: n (notification) | p (popup)\n");
     printf("  --show-config          Show current config\n");
+    printf("  --version              Show application version\n");
     printf("  --daemon               Run as daemon (default behavior)\n");
     printf("  --help                 Show this help\n");
 }
@@ -330,6 +332,10 @@ int main(int argc, char *argv[]) {
             printf("interval=%d\nmode=%s\n",
                 cfg.interval_minutes,
                 cfg.mode == MODE_POPUP ? "popup" : "notification");
+            return 0;
+
+        } else if (strcmp(argv[i], "--version") == 0) {
+            printf("EyeKi %s\n", EYEKI_VERSION);
             return 0;
 
         } else if (strcmp(argv[i], "--daemon") == 0) {

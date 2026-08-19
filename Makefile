@@ -14,7 +14,7 @@ override CFLAGS += -Wall -Wextra $(PKG_CFLAGS)
 
 TARGET = eyeki
 SOURCES = eyeki.c
-HEADERS = config.h
+HEADERS = config.h version.h
 SERVICE = eyeki.service
 
 all: $(TARGET)
