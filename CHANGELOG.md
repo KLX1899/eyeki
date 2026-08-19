@@ -7,11 +7,14 @@ All notable changes should be documented here. The format follows Keep a Changel
 ### Added
 
 - An authoritative source version and `--version` CLI command.
+- Desktop-independent scheduler regression tests for threshold, idle, unknown-state, and clock-discontinuity behavior.
 - User, contributor, AI-agent, architecture, development, roadmap, privacy, security, release, and repository-audit documentation.
 - GitHub bug, feature, and pull-request templates.
 
 ### Changed
 
+- Extracted configuration and monotonic scheduling into separate C modules.
+- Changed away/unknown activity handling to discard accumulated active time instead of preserving or advancing it.
 - Corrected the Makefile's D-Bus provider from `dbus-1` to `libsystemd`, matching the source's `sd-bus` API.
 - Updated ignore rules so source packaging metadata can be tracked while build binaries and generated source archives remain ignored.
 

@@ -13,9 +13,12 @@ PKG_LIBS := $(shell $(PKG_CONFIG) --libs gtk+-3.0 libnotify libsystemd)
 override CFLAGS += -Wall -Wextra $(PKG_CFLAGS)
 
 TARGET = eyeki
-SOURCES = eyeki.c
-HEADERS = config.h version.h
+SOURCES = eyeki.c config.c scheduler.c
+HEADERS = config.h scheduler.h version.h
 SERVICE = eyeki.service
+
+TEST_TARGET = tests/test_scheduler
+TEST_SOURCES = tests/test_scheduler.c scheduler.c
 
 all: $(TARGET)
 
@@ -31,6 +34,12 @@ uninstall:
 	rm -f $(DESTDIR)$(SYSTEMD_USER_DIR)/$(SERVICE)
 
 clean:
-	rm -f $(TARGET)
+	rm -f $(TARGET) $(TEST_TARGET)
 
-.PHONY: all install uninstall clean
+test: $(TEST_TARGET)
+	./$(TEST_TARGET)
+
+$(TEST_TARGET): $(TEST_SOURCES) scheduler.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(TEST_SOURCES)
+
+.PHONY: all install uninstall clean test

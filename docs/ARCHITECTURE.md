@@ -2,7 +2,7 @@
 
 ## Overview
 
-EyeKi is a single-threaded Linux desktop process. Nearly all behavior lives in `eyeki.c`; configuration types and function bodies live in `config.h`. It has no IPC server, database, network client, plugin system, or background worker.
+EyeKi is a single-threaded Linux desktop process. CLI, activity lookup, and presentation still live in `eyeki.c`; configuration persistence and scheduling are separate C modules. It has no IPC server, database, network client, plugin system, or background worker.
 
 ```mermaid
 flowchart LR
@@ -23,11 +23,12 @@ flowchart LR
 
 | Location | Responsibility | Important limitations |
 | --- | --- | --- |
-| `main()` in `eyeki.c` | Parse CLI, initialize one UI backend, accumulate active time, reload settings at a trigger, dispatch reminders | Infinite foreground loop; wall-clock timing; backend initialization and reload can disagree |
+| `main()` in `eyeki.c` | Parse CLI, initialize one UI backend, sample activity, reload settings at a trigger, dispatch reminders | Infinite foreground loop; backend initialization and reload can disagree |
 | `get_idle_seconds()` | Open system bus, list logind sessions, query idle properties | Always uses first session; recreates bus connection every poll; errors become “active” |
 | `send_notification()` | Initialize libnotify lazily and request a ten-second notification | Return values/errors ignored; hard-coded message |
 | `show_popup()` and callback | Build fullscreen window and block in a manual GTK event loop until button click | Window-manager close is not handled; global mutable state; compositor-dependent |
-| `config.h` | Define `Config`, defaults, parse and overwrite the config file | Header contains external function definitions; no validation, XDG support, atomic write, or error reporting |
+| `config.c` / `config.h` | Define `Config`, defaults, parse and overwrite the config file | No validation, XDG support, atomic write, or error reporting |
+| `scheduler.c` / `scheduler.h` | Accumulate monotonic active time, reset on idle/unknown state, and report threshold crossing | Receives ten-second samples; immediate config-change observation is not implemented |
 | `Makefile` | Compile with GTK/libnotify/libsystemd; install binary and unit | No debug/test/lint/package targets |
 | `eyeki.service` | Run `/usr/bin/eyeki --daemon` as a user service and restart failures | Fixed installed path; no hardening or graphical-session binding beyond ordering |
 | `debian/` | Preliminary Debian source-package metadata | Unverified, incomplete, and version/attribution review required |
@@ -54,9 +55,9 @@ stateDiagram-v2
     InitializeBackend --> Sleep
     Sleep --> QueryIdle: after 10 seconds
     QueryIdle --> Accumulate: idle less than 60 seconds
-    QueryIdle --> PreserveCount: idle at least 60 seconds
+    QueryIdle --> ResetActive: idle at least 60 seconds or lookup failed
     Accumulate --> CheckThreshold
-    PreserveCount --> CheckThreshold
+    ResetActive --> CheckThreshold
     CheckThreshold --> Sleep: below startup/current threshold
     CheckThreshold --> ReloadSettings: threshold reached
     ReloadSettings --> Notify: notification mode
@@ -66,13 +67,13 @@ stateDiagram-v2
     ResetCount --> Sleep
 ```
 
-`elapsed = time(NULL) - last_check` is accumulated, so clock changes can make it negative or unexpectedly large. Idle time pauses but does not reset progress. Settings are reloaded only after comparison with the previously loaded interval, so shortening an interval is not immediately observed.
+The extracted scheduler accumulates differences between `CLOCK_MONOTONIC` samples. Idle or unknown activity state resets progress to zero. Settings are still reloaded only after comparison with the previously loaded interval, so changes are not immediately observed.
 
 ## Idle detection
 
-Every poll creates a system-bus connection and calls logind `ListSessions`. The code reads only the first `(session id, uid, username, seat, object path)` record. It then queries that session's `IdleHint`; if true, it reads `IdleSinceHint` and subtracts it from the current realtime clock.
+Every poll creates a system-bus connection and calls logind `ListSessions`. The code reads only the first `(session id, uid, username, seat, object path)` record. It then queries that session's `IdleHint`; if true, it reads `IdleSinceHintMonotonic` and subtracts it from the current monotonic clock.
 
-This does not establish that the chosen session belongs to the process owner, seat, or active graphical session. Empty results and D-Bus/property errors return zero, which the scheduler interprets as activity. A future implementation should resolve the current session explicitly, reuse connections where appropriate, distinguish unknown from active, and use bounded monotonic durations.
+This does not establish that the chosen session belongs to the process owner, seat, or active graphical session. Empty results and D-Bus/property errors produce an unknown activity state, which resets the scheduler and emits one diagnostic per failure/recovery period. A future implementation should resolve the current session explicitly and reuse or subscribe through a persistent connection.
 
 ## Popup and notification flow
 

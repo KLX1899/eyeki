@@ -3,15 +3,17 @@
 #include <unistd.h>
 #include <time.h>
 #include <string.h>
+#include <stdbool.h>
+#include <limits.h>
 #include <systemd/sd-bus.h>
 #include <libnotify/notify.h>
 #include <gtk/gtk.h>
 #include "config.h"
+#include "scheduler.h"
 #include "version.h"
 
-/* If the user has been idle for longer than this threshold (in seconds),
-   their active time accumulation is paused. This prevents counting
-   screen-off or away time toward the reminder interval. */
+/* If the user has been idle for this long (in seconds), discard accumulated
+   active time and require a fresh continuous-use interval. */
 #define IDLE_THRESHOLD_SEC 60
 
 // Global reference to the popup window so the button callback can destroy it.
@@ -31,22 +33,27 @@ static int popup_dismissed = 0;
  *   3. Read the boolean property IdleHint on that session.
  *      - If false  → user is active, return 0 immediately.
  *      - If true   → user is idle, continue to step 4.
- *   4. Read IdleSinceHint (a microsecond-precision CLOCK_REALTIME timestamp
+ *   4. Read IdleSinceHintMonotonic (a microsecond-precision monotonic timestamp
  *      of when the session became idle).
  *   5. Subtract that timestamp from the current time to get elapsed idle
  *      seconds and return it.
  *
- * Returns 0 on any error or when the user is active.
+ * Returns true and writes the idle duration on success. Returns false when
+ * logind cannot provide a trustworthy result, so callers do not confuse an
+ * unknown state with user activity.
  */
-int get_idle_seconds() {
+bool get_idle_seconds(int *idle_seconds) {
     sd_bus *bus = NULL;
     sd_bus_error error = SD_BUS_ERROR_NULL;
     sd_bus_message *reply = NULL;
     int ret;
 
     // Open a connection to the system D-Bus (not the session bus).
+    if (!idle_seconds) return false;
+    *idle_seconds = 0;
+
     ret = sd_bus_open_system(&bus);
-    if (ret < 0) return 0;
+    if (ret < 0) return false;
 
     /* Ask logind for the list of all active login sessions.
      * The reply is an array of (susso) structs:
@@ -102,7 +109,7 @@ int get_idle_seconds() {
         // User is actively using the session — no idle time to report.
         if (!idle_hint) {
             sd_bus_unref(bus);
-            return 0;
+            return true;
         }
 
         /* Session is idle. Now find out exactly when it became idle so we
@@ -111,30 +118,32 @@ int get_idle_seconds() {
         sd_bus_error_free(&error);
         error = SD_BUS_ERROR_NULL;
 
-        /* IdleSinceHint is a uint64 microsecond timestamp (CLOCK_REALTIME)
+        /* IdleSinceHintMonotonic is a uint64 microsecond monotonic timestamp
          * representing the moment the session transitioned to idle. */
         ret = sd_bus_get_property_trivial(
             bus,
             "org.freedesktop.login1",
             session_path,
             "org.freedesktop.login1.Session",
-            "IdleSinceHint",
+            "IdleSinceHintMonotonic",
             &error,
             't',          /* D-Bus type: uint64 */
             &idle_since
         );
         if (ret < 0 || idle_since == 0) goto cleanup;
 
-        /* Get the current wall-clock time in microseconds to match the
-         * precision of IdleSinceHint. */
+        /* Use the same monotonic clock domain as IdleSinceHintMonotonic. */
         struct timespec ts;
-        clock_gettime(CLOCK_REALTIME, &ts);
+        if (clock_gettime(CLOCK_MONOTONIC, &ts) < 0) goto cleanup;
         uint64_t now_usec = (uint64_t)ts.tv_sec * 1000000ULL + ts.tv_nsec / 1000;
 
+        if (idle_since > now_usec) goto cleanup;
+
         // Convert the difference from microseconds to whole seconds.
-        int idle_sec = (int)((now_usec - idle_since) / 1000000ULL);
+        uint64_t idle_elapsed = (now_usec - idle_since) / 1000000ULL;
+        *idle_seconds = idle_elapsed > INT_MAX ? INT_MAX : (int)idle_elapsed;
         sd_bus_unref(bus);
-        return idle_sec > 0 ? idle_sec : 0;
+        return true;
     }
 
 cleanup:
@@ -142,7 +151,7 @@ cleanup:
     if (reply) sd_bus_message_unref(reply);
     sd_bus_error_free(&error);
     sd_bus_unref(bus);
-    return 0;
+    return false;
 }
 
 /* send_notification()
@@ -289,7 +298,7 @@ void print_usage(const char *prog) {
  *    Initialise the notification/GTK subsystem, then enter an infinite loop
  *    that tracks how many seconds the user has been actively using the screen.
  *    Every 10 seconds the loop:
- *      a) Measures elapsed wall-clock time since the last check.
+ *      a) Samples a monotonic clock that is unaffected by wall-clock changes.
  *      b) Queries idle time from logind.
  *      c) Adds elapsed time to active_seconds only when idle < IDLE_THRESHOLD_SEC.
  *      d) Fires a reminder (notification or popup) when active_seconds reaches
@@ -364,9 +373,20 @@ int main(int argc, char *argv[]) {
         cfg.interval_minutes,
         cfg.mode == MODE_POPUP ? "popup" : "notification");
 
-    int    interval_seconds = cfg.interval_minutes * 60;
-    time_t active_seconds   = 0;
-    time_t last_check       = time(NULL);
+    Scheduler scheduler;
+    struct timespec monotonic_now;
+    bool activity_error_reported = false;
+
+    if (cfg.interval_minutes <= 0 ||
+        clock_gettime(CLOCK_MONOTONIC, &monotonic_now) < 0 ||
+        !scheduler_init(
+            &scheduler,
+            (uint64_t)cfg.interval_minutes * 60ULL,
+            monotonic_now
+        )) {
+        fprintf(stderr, "Failed to initialize reminder scheduler.\n");
+        return 1;
+    }
 
     // --- Main daemon loop ---
     while (1) {
@@ -374,31 +394,49 @@ int main(int argc, char *argv[]) {
          * 10 s gives ~6 checks per minute which is precise enough. */
         sleep(10);
 
-        time_t now     = time(NULL);
-        time_t elapsed = now - last_check; /* seconds since last iteration */
-        last_check     = now;
-
-        int idle_sec = get_idle_seconds();
-
-        /* Only accumulate active time when the user is not idle.
-         * When idle >= IDLE_THRESHOLD_SEC we simply skip adding elapsed time;
-         * the counter is NOT reset so a brief idle pause does not wipe progress. */
-        if (idle_sec < IDLE_THRESHOLD_SEC) {
-            active_seconds += elapsed;
+        if (clock_gettime(CLOCK_MONOTONIC, &monotonic_now) < 0) {
+            fprintf(stderr, "Failed to read monotonic clock.\n");
+            return 1;
         }
 
-        /* Fire the reminder once the active threshold is reached,
-         * then reset the counter to start the next interval. */
-        if (active_seconds >= interval_seconds) {
+        int idle_seconds = 0;
+        ActivityState activity;
+        if (!get_idle_seconds(&idle_seconds)) {
+            activity = ACTIVITY_UNKNOWN;
+            if (!activity_error_reported) {
+                fprintf(stderr, "Unable to determine idle state; timer reset.\n");
+                activity_error_reported = true;
+            }
+        } else {
+            activity = idle_seconds >= IDLE_THRESHOLD_SEC
+                ? ACTIVITY_IDLE
+                : ACTIVITY_ACTIVE;
+            if (activity_error_reported) {
+                fprintf(stderr, "Idle-state lookup recovered.\n");
+                activity_error_reported = false;
+            }
+        }
+
+        /* Idle and unknown samples both discard all accumulated active time. */
+        if (scheduler_record_sample(&scheduler, activity, monotonic_now)) {
             // Reload config to pick up any changes made via --set-mode or --set-interval
             cfg = load_config();
-            interval_seconds = cfg.interval_minutes * 60;
-            
+
             if (cfg.mode == MODE_POPUP)
                 show_popup();
             else
                 send_notification();
-            active_seconds = 0;
+
+            if (cfg.interval_minutes <= 0 ||
+                clock_gettime(CLOCK_MONOTONIC, &monotonic_now) < 0 ||
+                !scheduler_init(
+                    &scheduler,
+                    (uint64_t)cfg.interval_minutes * 60ULL,
+                    monotonic_now
+                )) {
+                fprintf(stderr, "Failed to restart reminder scheduler.\n");
+                return 1;
+            }
         }
 
     }

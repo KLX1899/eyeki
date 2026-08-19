@@ -2,13 +2,13 @@
 
 EyeKi is a small Linux reminder daemon that counts active session time and prompts the user to apply eye drops. It can send a desktop notification or display a fullscreen GTK popup.
 
-> **Status:** early, pre-release prototype. There are no verifiable tagged releases, automated tests, CI workflows, or production-ready packages. Configuration validation, session detection, localization, and packaging need work before general distribution. See the [roadmap](docs/ROADMAP.md).
+> **Status:** early, pre-release prototype. Scheduler unit tests exist but have not yet run in the current incomplete toolchain; there are no verifiable tagged releases, CI workflows, or production-ready packages. Configuration validation, session detection, localization, and packaging need work before general distribution. See the [roadmap](docs/ROADMAP.md).
 
 EyeKi only provides configurable reminders; the repository contains no clinical validation or medical guidance. Users should choose an interval appropriate to guidance from their healthcare professional.
 
 ## Implemented features
 
-- Counts time in ten-second polling cycles and pauses accumulation when the selected logind session reports at least 60 seconds of idle time.
+- Counts time in ten-second polling cycles and discards accumulated active time when the selected logind session reports at least 60 seconds of idle time.
 - Uses either a ten-second libnotify desktop notification or a fullscreen GTK 3 popup that requires a button click.
 - Stores the interval and reminder mode in a local plain-text configuration file.
 - Provides command-line operations to show and change those settings.
@@ -56,6 +56,8 @@ make
 
 `make clean` removes the local `eyeki` build output. The build command is defined by the repository Makefile, but it is not yet exercised by CI.
 
+`make test` builds and runs the desktop-independent scheduler unit tests.
+
 For a system-wide install, inspect `eyeki.service` first, then run with suitable privileges:
 
 ```sh
@@ -98,7 +100,7 @@ Persian is the initial product language. The current messages are hard-coded and
 - **Settings report success but revert:** make sure `$HOME/.config` exists and check `$HOME/.config/eye_reminder/config`.
 - **No notification appears:** confirm the desktop notification service is running and inspect stderr or the user journal. Delivery failures are currently not surfaced by EyeKi.
 - **Popup cannot open:** start EyeKi inside the intended graphical session and check the display environment. GTK initialization can terminate when no display is available.
-- **Timer advances while away:** current D-Bus logic inspects the first logind session, not reliably the process owner's active session. D-Bus failures are treated as active time.
+- **Timer behaves unexpectedly around session changes:** current D-Bus logic inspects the first logind session, not reliably the process owner's active session. D-Bus failures reset the timer because activity cannot be established reliably.
 - **Service loops or fails:** use `systemctl --user status eyeki.service` and `journalctl --user -u eyeki.service`; the unit restarts failures after five seconds.
 - **Build dependency errors:** verify all three `pkg-config` modules with `pkg-config --modversion gtk+-3.0 libnotify libsystemd`.
 
@@ -108,10 +110,9 @@ The source contains no network client or telemetry. It stores only the interval 
 
 ## Known limitations
 
-- No automated tests, linting, formatting checks, CI, or verified release process.
+- Scheduler unit tests exist, but there is no current pass evidence, broader automated coverage, linting, formatting check, CI, or verified release process.
 - Numeric configuration is not validated; zero, negative, or overflowing intervals can cause incorrect behavior.
-- Idle detection can select the wrong login session and treats lookup errors as activity.
-- Wall-clock changes can distort reminder timing.
+- Idle detection can select the wrong login session; lookup errors reset progress until detection recovers.
 - Closing the popup through the window manager can leave its manual event loop running.
 - Notification errors and configuration-write errors are ignored.
 - Accessibility, right-to-left layout, translations, and Wayland behavior are untested.

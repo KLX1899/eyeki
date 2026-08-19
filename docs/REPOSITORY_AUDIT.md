@@ -31,7 +31,7 @@ The ignore file incorrectly hid the systemd unit and Debian source metadata and 
 - `config.h` defines non-static functions; adding another translation unit that includes it causes duplicate definitions.
 - `get_idle_seconds()` chooses the first system session rather than the current user's intended session.
 - A D-Bus error returns zero idle time, so failures count toward reminders.
-- Realtime/wall-clock arithmetic controls elapsed duration and can jump.
+- The original realtime/wall-clock scheduler was replaced with a monotonic scheduler, but the change still requires clean-build and runtime evidence.
 - Integer parsing, range, and multiplication are unchecked.
 - Save creates only the final directory, silently fails without `$HOME/.config`, overwrites non-atomically, and reports success anyway.
 - Live interval updates wait for the old threshold; live notification-to-popup updates can call uninitialized GTK.

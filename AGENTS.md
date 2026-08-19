@@ -5,7 +5,9 @@ Operational instructions for AI coding agents working in this repository. Read t
 ## Repository map
 
 - `eyeki.c` — CLI parsing, logind idle query, timer loop, libnotify reminder, and GTK popup.
-- `config.h` — `Config`, defaults, and inline load/save implementations. It is safe only while the project has one translation unit.
+- `config.c`, `config.h` — `Config`, defaults, and load/save implementations.
+- `scheduler.c`, `scheduler.h` — monotonic active-time state machine, independent of desktop libraries.
+- `tests/test_scheduler.c` — desktop-independent scheduler regression tests.
 - `Makefile` — build plus staged/system installation; output is `eyeki`.
 - `eyeki.service` — systemd user unit expecting `/usr/bin/eyeki`.
 - `install.sh` — stale installer; do not run or use as authoritative guidance.
@@ -28,7 +30,7 @@ Important invariants and fragility:
 - Idle detection reads the first result from `ListSessions`; it does not identify the current process user's session.
 - D-Bus errors return zero idle seconds, so failures count as activity.
 - The popup owns a manual GTK event loop and exits only when `popup_dismissed` changes.
-- The timer uses `time(NULL)`, so wall-clock jumps affect accumulation.
+- The timer uses `CLOCK_MONOTONIC`; idle or unknown activity state resets accumulated active time.
 
 See `docs/ARCHITECTURE.md` for diagrams and detailed flows.
 
@@ -56,14 +58,14 @@ systemctl --user enable --now eyeki.service
 
 At the 2026-08-14 documentation audit, the existing ignored x86-64 binary successfully ran `--help`, default `--show-config`, valid setting updates when an isolated `$HOME/.config` existed, and invalid-option paths. The host lacked a compiler, Make, development `.pc` files, Debian tools, and documentation linters, so compilation and packaging were not executed. Never convert this historical result into a current pass claim; run commands in the active environment.
 
-There are no configured test, lint, format, type-check, or documentation-check targets. Do not invent a passing check. For C changes, at minimum build with warnings enabled by the Makefile and manually exercise affected CLI/desktop behavior. Prefer adding automated tests before changing timer/config parsing substantially.
+`make test` runs scheduler unit tests. There are no configured lint, format, type-check, documentation-check, integration-test, or CI targets. Do not invent a passing check. For C changes, at minimum build with warnings enabled by the Makefile, run available unit tests, and manually exercise affected CLI/desktop behavior.
 
 ## Code conventions
 
 - C with four-space indentation, braces on the same line, descriptive comments, and `snake_case` functions/variables.
 - Keep warnings enabled (`-Wall -Wextra`). Avoid broad formatting churn.
 - Use bounded path construction and check return values. New code should not copy the current silent-error pattern.
-- `config.h` contains function bodies by design; move them to a `.c` file before introducing a second translation unit.
+- Keep public headers limited to types and declarations; place externally linked function bodies in `.c` files.
 - User-facing text is currently hard-coded Persian. Do not add more hard-coded strings; plan a localization boundary.
 - Preserve lowercase installed names: binary `eyeki`, unit `eyeki.service`, project display name `EyeKi`.
 

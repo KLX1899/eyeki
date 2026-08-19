@@ -45,7 +45,7 @@ Do not use `install.sh`. It compiles nonexistent `EyeKi.c`, creates an uppercase
 
 ## Tests, linting, formatting, and type checking
 
-None are configured. There is no test directory, test target, linter configuration, formatter configuration, static-analysis target, or CI workflow. C has no separate type-check command; compilation is the current type/syntax check. Do not report these checks as passing.
+`make test` builds and runs the desktop-independent scheduler unit tests. There is no linter configuration, formatter configuration, static-analysis target, broader integration suite, or CI workflow. C has no separate type-check command; compilation is the current type/syntax check. Do not report checks as passing unless they ran in the active environment.
 
 For every C change, run at least:
 

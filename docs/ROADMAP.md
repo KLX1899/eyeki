@@ -34,7 +34,7 @@ This roadmap is evidence-based planning guidance, not a commitment or release sc
 
 | Area and item | Motivation | Priority | Dependencies | Acceptance criteria |
 | --- | --- | --- | --- | --- |
-| Architecture — separate scheduler, config, activity, and presentation adapters | Current single file/globals impede testing and ports | P2 | Regression suite | Core tests run without GTK/D-Bus; adapters have narrow interfaces; behavior remains documented |
+| Architecture — complete activity and presentation adapters | Scheduler/config extraction has started, but activity/presentation globals still impede testing and ports | P2 | Expanded regression suite | Core tests run without GTK/D-Bus; adapters have narrow interfaces; behavior remains documented |
 | UX — optional snooze or other CLI controls | Could extend reminder control without adding a graphical settings application or combining presentation modes | P2 | Product research; accessibility; persistence schema | Explicit user stories, accessible design, migration, privacy review, and tests preserve CLI-only configuration and notification-XOR-popup behavior |
 | Platform integration — evaluate modern GTK/desktop APIs | GTK 3 is mature but future maintenance may favor another path | P2 | Supported desktop matrix | Decision record compares lifecycle, accessibility, Wayland, packaging, and migration cost |
 | Distribution — evaluate Flatpak/Snap or additional distro formats | Sandboxing may simplify delivery but conflicts with logind/system-bus access | P2 | Stable upstream release; policy verification | Minimal reviewed permissions, functional idle/notification flow, reproducible manifest, store policy compliance |

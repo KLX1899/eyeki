@@ -8,16 +8,16 @@ Likely users are Linux desktop users whose healthcare guidance already tells the
 
 ## Confirmed current capabilities
 
-- A single C process provides CLI handling, polling, persistence, and presentation.
+- A single C process provides CLI handling, polling, persistence, scheduling, and presentation through a small set of C modules.
 - The configurable interval defaults to 60 minutes.
 - The default mode is a GTK 3 fullscreen popup; notification mode uses libnotify.
-- The loop polls every ten seconds and accumulates elapsed wall time when reported idle time is below 60 seconds.
+- The loop polls every ten seconds and uses monotonic elapsed time while reported idle time is below 60 seconds. Reaching the idle threshold or losing a trustworthy idle-state result resets accumulated active time.
 - Settings persist as `interval=<integer>` and `mode=popup|notification` under `$HOME/.config/eye_reminder/config`.
 - CLI operations are `--help`, `--version`, `--show-config`, `--set-interval <min>`, `--set-mode n|p`, and `--daemon`.
 - systemd-logind supplies idle metadata through system D-Bus.
 - A systemd user unit and preliminary Debian metadata exist locally.
 
-The repository provides no test suite, settings UI, snooze, reminder history, tray icon, network service, telemetry, localization catalog, automatic update mechanism, release automation, or verifiable published release.
+The repository provides scheduler unit tests but no broader test suite, settings UI, snooze, reminder history, tray icon, network service, telemetry, localization catalog, automatic update mechanism, release automation, or verifiable published release.
 
 EyeKi is intentionally configured through the CLI. A graphical settings application is not a product goal. Presentation remains an exclusive choice: notification XOR popup. The two modes must never be emitted together for one reminder.
 
@@ -34,9 +34,9 @@ Changing any of these boundaries requires explicit product, privacy, security, a
 
 ## Current technical state
 
-The project is an early Linux prototype with two tracked source files and preliminary local build/packaging files. It has no release tags or CI (automated builds and checks that run on repository changes). The existing ignored binary demonstrates the one-shot CLI but is not a trustworthy release artifact. A one-shot CLI command performs one operation, such as changing or printing a setting, and then exits; it does not enter the long-running reminder loop. The source archive and Debian metadata are not release-ready.
+The project is an early Linux prototype with separate configuration and scheduler modules plus preliminary local build/packaging files. It has no release tags or CI (automated builds and checks that run on repository changes). Scheduler tests exist but have no current pass evidence because the active environment lacks a compiler and Make. The existing ignored binary demonstrates the older one-shot CLI but is not a trustworthy release artifact. A one-shot CLI command performs one operation, such as changing or printing a setting, and then exits; it does not enter the long-running reminder loop. The source archive and Debian metadata are not release-ready.
 
-Important correctness gaps include unvalidated intervals, fragile session selection, silent persistence/notification failures, wall-clock timing, and unsafe runtime switching into popup mode. “Fragile session selection” means EyeKi accepts the first session returned by logind instead of proving that it is the current user's relevant graphical session. On a machine with two signed-in users, an SSH session, or multiple seats, the first result may belong to somebody else, so EyeKi may pause or advance the timer using the wrong person's idle state. “Wall-clock timing” means elapsed duration is derived from calendar time (`time(NULL)`). If NTP or the user moves that clock, or the machine suspends between samples, a ten-second polling cycle can appear much shorter, longer, or even negative. Elapsed scheduling should instead use an explicitly selected monotonic clock, whose suspend behavior is part of the scheduler policy and which is not changed by setting the date.
+Important correctness gaps include unvalidated intervals, fragile session selection, silent persistence/notification failures, delayed settings reload, and unsafe runtime switching into popup mode. “Fragile session selection” means EyeKi accepts the first session returned by logind instead of proving that it is the current user's relevant graphical session. On a machine with two signed-in users, an SSH session, or multiple seats, the first result may belong to somebody else, so EyeKi may reset or advance the timer using the wrong person's idle state. Elapsed scheduling and logind idle timestamps now use a monotonic clock, avoiding changes to calendar time, but the implementation still needs build and runtime evidence on supported Ubuntu sessions.
 
 See [Architecture](ARCHITECTURE.md), [Repository audit](REPOSITORY_AUDIT.md), and [Roadmap](ROADMAP.md).
 
@@ -44,7 +44,7 @@ See [Architecture](ARCHITECTURE.md), [Repository audit](REPOSITORY_AUDIT.md), an
 
 - **Polling:** periodically waking the process (currently every ten seconds), asking logind for the idle state, and updating the scheduler from that sample. EyeKi does not receive a continuous stream of input events.
 - **Active time:** elapsed time accumulated between polling samples while `get_idle_seconds()` reports less than 60 seconds of idle time. This is an approximation, not verified keyboard/mouse or screen-on time.
-- **Idle threshold:** the hard-coded 60-second boundary that pauses accumulation.
+- **Idle threshold:** the hard-coded 60-second boundary that discards accumulated active time.
 - **Reminder interval:** configured whole minutes of accumulated active time before a prompt.
 - **Notification mode:** a libnotify message with a requested ten-second timeout.
 - **Popup mode:** a fullscreen GTK window whose button sets a dismissal flag.
@@ -58,7 +58,7 @@ See [Architecture](ARCHITECTURE.md), [Repository audit](REPOSITORY_AUDIT.md), an
 
 - Linux desktop integration currently depends on systemd-logind, GTK 3, and libnotify.
 - Reminder presentation is always exclusive: exactly one of notification or popup is stored and used. Combining them is not a future product goal.
-- Away time is intended not to count toward reminders.
+- Reaching the idle threshold means the user is considered away; accumulated active time is discarded and the next active period starts from zero.
 - Settings can be changed through one-shot CLI invocations while another process is running.
 - Every successful settings change must be observed promptly by the running process and reset accumulated active time to zero. Counting then restarts under the complete new configuration; elapsed time is not preserved or reduced modulo the new interval.
 - Accepted production intervals are whole minutes from 10 through 300 (five hours), inclusive. Faster automated tests should inject time or use a test-only scheduler interface rather than expose sub-minute production settings.
@@ -92,7 +92,7 @@ See [Architecture](ARCHITECTURE.md), [Repository audit](REPOSITORY_AUDIT.md), an
 - GTK 3 and the current global/manual event-loop design make it harder to replace or independently test the two local presentation backends (popup and notification), handle multiple monitor windows, or port presentation to another OS. This is unrelated to a web backend.
 - logind session idle reporting depends on desktop/session integration and may not represent actual input activity.
 - Distribution sandboxes such as Snap and Flatpak may restrict logind queries on the system bus. The initial Ubuntu `.deb` can avoid that sandbox mismatch; later sandboxed packages need narrowly reviewed permissions or a different activity provider and must be tested against current store policy.
-- There is no automated regression evidence: no repeatable test suite currently proves that a previously working behavior still works after a code change. Manual success once cannot detect future regressions automatically.
+- Scheduler regression tests now describe threshold, idle reset, unknown-state reset, and clock-discontinuity behavior, but they have not run in the active environment and are not enforced by CI. Other behavior still lacks repeatable automated evidence.
 - At the documentation audit, some packaging artifacts were ignored or untracked. Such files may be missing from a clone, may contain stale/generated machine-specific content, and cannot be reliably reviewed or reproduced. Authoritative packaging source must be tracked; generated binaries and archives must remain excluded and be rebuilt from a clean tagged checkout.
 
 ## Start here for a new AI session

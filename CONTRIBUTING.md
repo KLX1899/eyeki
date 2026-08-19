@@ -45,11 +45,12 @@ Check every library/system call you add. Validate external/configuration values 
 
 ## Tests and verification
 
-There is no automated test suite yet. That is a limitation, not permission to skip evidence. Run all available relevant checks and report exact results:
+Scheduler unit tests exist, but broader config/activity/presentation coverage and CI do not. Run all available relevant checks and report exact results:
 
 ```sh
 make clean
 make
+make test
 ./eyeki --help
 ./eyeki --show-config
 ```
