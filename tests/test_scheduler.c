@@ -8,6 +8,17 @@ static struct timespec at_seconds(time_t seconds) {
     return value;
 }
 
+static void test_short_interval_can_be_injected(void) {
+    Scheduler scheduler;
+
+    assert(scheduler_init(&scheduler, 1, at_seconds(100)));
+    assert(scheduler_record_sample(
+        &scheduler,
+        ACTIVITY_ACTIVE,
+        at_seconds(101)
+    ));
+}
+
 static void test_active_time_reaches_interval(void) {
     Scheduler scheduler;
 
@@ -84,6 +95,7 @@ static void test_backward_sample_resets_scheduler(void) {
 }
 
 int main(void) {
+    test_short_interval_can_be_injected();
     test_active_time_reaches_interval();
     test_idle_discards_active_time();
     test_unknown_state_discards_active_time();

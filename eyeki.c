@@ -275,16 +275,20 @@ void show_popup() {
 
 /* print_usage()
  *
- * Prints a short command-line reference to stdout.
+ * Prints a short command-line reference to the requested stream.
  */
-void print_usage(const char *prog) {
-    printf("Usage: %s [OPTIONS]\n\n", prog);
-    printf("  --set-interval <min>   Set reminder interval in minutes\n");
-    printf("  --set-mode <mode>      Set mode: n (notification) | p (popup)\n");
-    printf("  --show-config          Show current config\n");
-    printf("  --version              Show application version\n");
-    printf("  --daemon               Run as daemon (default behavior)\n");
-    printf("  --help                 Show this help\n");
+static void print_usage(FILE *stream, const char *prog) {
+    fprintf(stream, "Usage: %s [OPTIONS]\n\n", prog);
+    fprintf(stream,
+        "  --set-interval <min>   Set interval (%d-%d whole minutes)\n",
+        EYEKI_MIN_INTERVAL_MINUTES,
+        EYEKI_MAX_INTERVAL_MINUTES);
+    fprintf(stream,
+        "  --set-mode <mode>      Set mode: n (notification) | p (popup)\n");
+    fprintf(stream, "  --show-config          Show current config\n");
+    fprintf(stream, "  --version              Show application version\n");
+    fprintf(stream, "  --daemon               Run as daemon (default behavior)\n");
+    fprintf(stream, "  --help                 Show this help\n");
 }
 
 /* main()
@@ -309,9 +313,21 @@ int main(int argc, char *argv[]) {
 
     for (int i = 1; i < argc; i++) {
 
-        if (strcmp(argv[i], "--set-interval") == 0 && i + 1 < argc) {
-            // Parse the next token as the new interval and persist it.
-            cfg.interval_minutes = atoi(argv[++i]);
+        if (strcmp(argv[i], "--set-interval") == 0) {
+            int interval_minutes;
+
+            if (i + 1 >= argc) {
+                print_usage(stderr, argv[0]);
+                return 1;
+            }
+
+            i++;
+            if (!parse_interval_minutes(argv[i], &interval_minutes)) {
+                print_usage(stderr, argv[0]);
+                return 1;
+            }
+
+            cfg.interval_minutes = interval_minutes;
             save_config(&cfg);
             printf("Interval set to %d minutes.\n", cfg.interval_minutes);
             return 0;
@@ -350,11 +366,11 @@ int main(int argc, char *argv[]) {
         } else if (strcmp(argv[i], "--daemon") == 0) {
             // Explicit daemon flag — just fall through to the daemon loop.
         } else if (strcmp(argv[i], "--help") == 0) {
-            print_usage(argv[0]);
+            print_usage(stdout, argv[0]);
             return 0;
         } else {
             fprintf(stderr, "Unknown option: %s\n", argv[i]);
-            print_usage(argv[0]);
+            print_usage(stderr, argv[0]);
             return 1;
         }
     }
@@ -375,13 +391,17 @@ int main(int argc, char *argv[]) {
 
     Scheduler scheduler;
     struct timespec monotonic_now;
+    uint64_t interval_seconds;
     bool activity_error_reported = false;
 
-    if (cfg.interval_minutes <= 0 ||
+    if (!interval_minutes_to_seconds(
+            cfg.interval_minutes,
+            &interval_seconds
+        ) ||
         clock_gettime(CLOCK_MONOTONIC, &monotonic_now) < 0 ||
         !scheduler_init(
             &scheduler,
-            (uint64_t)cfg.interval_minutes * 60ULL,
+            interval_seconds,
             monotonic_now
         )) {
         fprintf(stderr, "Failed to initialize reminder scheduler.\n");
@@ -427,11 +447,14 @@ int main(int argc, char *argv[]) {
             else
                 send_notification();
 
-            if (cfg.interval_minutes <= 0 ||
+            if (!interval_minutes_to_seconds(
+                    cfg.interval_minutes,
+                    &interval_seconds
+                ) ||
                 clock_gettime(CLOCK_MONOTONIC, &monotonic_now) < 0 ||
                 !scheduler_init(
                     &scheduler,
-                    (uint64_t)cfg.interval_minutes * 60ULL,
+                    interval_seconds,
                     monotonic_now
                 )) {
                 fprintf(stderr, "Failed to restart reminder scheduler.\n");

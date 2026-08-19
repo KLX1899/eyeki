@@ -2,7 +2,7 @@
 
 EyeKi is a small Linux reminder daemon that counts active session time and prompts the user to apply eye drops. It can send a desktop notification or display a fullscreen GTK popup.
 
-> **Status:** early, pre-release prototype. Scheduler unit tests exist but have not yet run in the current incomplete toolchain; there are no verifiable tagged releases, CI workflows, or production-ready packages. Configuration validation, session detection, localization, and packaging need work before general distribution. See the [roadmap](docs/ROADMAP.md).
+> **Status:** early, pre-release prototype. Scheduler and interval/config unit tests exist but have not yet run in the current incomplete toolchain; there are no verifiable tagged releases, CI workflows, or production-ready packages. Configuration persistence, session detection, localization, and packaging need work before general distribution. See the [roadmap](docs/ROADMAP.md).
 
 EyeKi only provides configurable reminders; the repository contains no clinical validation or medical guidance. Users should choose an interval appropriate to guidance from their healthcare professional.
 
@@ -56,7 +56,7 @@ make
 
 `make clean` removes the local `eyeki` build output. The build command is defined by the repository Makefile, but it is not yet exercised by CI.
 
-`make test` builds and runs the desktop-independent scheduler unit tests.
+`make test` builds and runs the desktop-independent scheduler and interval/config unit tests.
 
 For a system-wide install, inspect `eyeki.service` first, then run with suitable privileges:
 
@@ -80,7 +80,7 @@ interval=60
 mode=popup
 ```
 
-Use a whole number from 10 through 300 minutes (five hours). This is the confirmed product range, although the current prototype does not enforce it yet:
+Use a whole number from 10 through 300 minutes (five hours). Values outside that range, signs, whitespace, trailing characters, and numbers that cannot be represented are rejected without changing the saved configuration:
 
 ```sh
 ./eyeki --set-interval 60
@@ -110,8 +110,8 @@ The source contains no network client or telemetry. It stores only the interval 
 
 ## Known limitations
 
-- Scheduler unit tests exist, but there is no current pass evidence, broader automated coverage, linting, formatting check, CI, or verified release process.
-- Numeric configuration is not validated; zero, negative, or overflowing intervals can cause incorrect behavior.
+- Scheduler and interval/config unit tests exist, but there is no current pass evidence, broader automated coverage, linting, formatting check, CI, or verified release process.
+- Invalid persisted interval values are ignored so they cannot replace the default or a preceding valid value; other malformed configuration fields are not diagnosed.
 - Idle detection can select the wrong login session; lookup errors reset progress until detection recovers.
 - Closing the popup through the window manager can leave its manual event loop running.
 - Notification errors and configuration-write errors are ignored.

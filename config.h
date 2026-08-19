@@ -1,6 +1,12 @@
 #ifndef EYEKI_CONFIG_H
 #define EYEKI_CONFIG_H
 
+#include <stdbool.h>
+#include <stdint.h>
+
+#define EYEKI_MIN_INTERVAL_MINUTES 10
+#define EYEKI_MAX_INTERVAL_MINUTES 300
+
 typedef enum {
     MODE_NOTIFICATION,
     MODE_POPUP
@@ -14,5 +20,7 @@ typedef struct {
 Config default_config(void);
 Config load_config(void);
 void save_config(const Config *cfg);
+bool parse_interval_minutes(const char *value, int *interval_minutes);
+bool interval_minutes_to_seconds(int interval_minutes, uint64_t *seconds);
 
 #endif /* EYEKI_CONFIG_H */

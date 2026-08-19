@@ -27,9 +27,9 @@ flowchart LR
 | `get_idle_seconds()` | Open system bus, list logind sessions, query idle properties | Always uses first session; recreates bus connection every poll; errors become “active” |
 | `send_notification()` | Initialize libnotify lazily and request a ten-second notification | Return values/errors ignored; hard-coded message |
 | `show_popup()` and callback | Build fullscreen window and block in a manual GTK event loop until button click | Window-manager close is not handled; global mutable state; compositor-dependent |
-| `config.c` / `config.h` | Define `Config`, defaults, parse and overwrite the config file | No validation, XDG support, atomic write, or error reporting |
+| `config.c` / `config.h` | Define `Config`, defaults, strict interval parsing/conversion, and config-file loading/saving | Mode parsing is permissive; no XDG support, atomic write, or error reporting |
 | `scheduler.c` / `scheduler.h` | Accumulate monotonic active time, reset on idle/unknown state, and report threshold crossing | Receives ten-second samples; immediate config-change observation is not implemented |
-| `Makefile` | Compile with GTK/libnotify/libsystemd; install binary and unit | No debug/test/lint/package targets |
+| `Makefile` | Compile with GTK/libnotify/libsystemd; run desktop-independent unit tests; install binary and unit | No debug/lint/package targets |
 | `eyeki.service` | Run `/usr/bin/eyeki --daemon` as a user service and restart failures | Fixed installed path; no hardening or graphical-session binding beyond ordering |
 | `debian/` | Preliminary Debian source-package metadata | Unverified, incomplete, and version/attribution review required |
 
@@ -37,7 +37,7 @@ flowchart LR
 
 1. `main()` calls `load_config()`. Missing/unreadable configuration silently produces defaults.
 2. Arguments are processed left-to-right.
-   - A recognized setting command writes the complete configuration, prints success regardless of write outcome, and exits.
+   - A recognized setting command validates interval input when applicable, writes the complete configuration, prints success regardless of write outcome, and exits.
    - `--show-config` prints the loaded values and exits.
    - `--help` prints usage and exits.
    - `--daemon` is a no-op marker; no arguments behave identically.
@@ -85,7 +85,7 @@ Runtime mode changes are fragile: if the process started in notification mode an
 
 ## Configuration and persistence flow
 
-The default is `interval_minutes = 60`, `MODE_POPUP`. `load_config()` starts from defaults, parses recognized lines, ignores unknown keys, uses `atoi` for interval, and maps every non-`popup` mode string to notification. There is no malformed-value or bounds detection.
+The default is `interval_minutes = 60`, `MODE_POPUP`. Interval values must contain only decimal digits and fall within the inclusive 10–300 minute production range. CLI values that fail validation exit nonzero before saving; persisted invalid interval values are ignored rather than replacing the default or a preceding valid value. A checked conversion produces scheduler seconds after validating the range, while scheduler tests can inject shorter durations directly. `load_config()` ignores unknown keys and still maps every non-`popup` mode string to notification without diagnosing malformed modes.
 
 `save_config()` builds paths from `HOME`, attempts to create only `$HOME/.config/eye_reminder`, and overwrites `config`. If `$HOME/.config` does not exist, saving fails silently. File mode depends on process umask; directory creation requests `0755`. Writes are not atomic and concurrent one-shot updates can overwrite each other.
 
@@ -93,7 +93,7 @@ The default is `interval_minutes = 60`, `MODE_POPUP`. `load_config()` starts fro
 
 The prevailing strategy is silent fallback:
 
-- Configuration and path failures use defaults or return without reporting.
+- Invalid persisted intervals use the default without reporting; configuration path/read failures also use defaults.
 - D-Bus errors return “not idle.”
 - libnotify initialization/show results and GTK CSS errors are ignored.
 - Only invalid CLI input has explicit nonzero exits.

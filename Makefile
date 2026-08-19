@@ -17,8 +17,7 @@ SOURCES = eyeki.c config.c scheduler.c
 HEADERS = config.h scheduler.h version.h
 SERVICE = eyeki.service
 
-TEST_TARGET = tests/test_scheduler
-TEST_SOURCES = tests/test_scheduler.c scheduler.c
+TEST_TARGETS = tests/test_scheduler tests/test_config
 
 all: $(TARGET)
 
@@ -34,12 +33,16 @@ uninstall:
 	rm -f $(DESTDIR)$(SYSTEMD_USER_DIR)/$(SERVICE)
 
 clean:
-	rm -f $(TARGET) $(TEST_TARGET)
+	rm -f $(TARGET) $(TEST_TARGETS)
 
-test: $(TEST_TARGET)
-	./$(TEST_TARGET)
+test: $(TEST_TARGETS)
+	./tests/test_scheduler
+	./tests/test_config
 
-$(TEST_TARGET): $(TEST_SOURCES) scheduler.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(TEST_SOURCES)
+tests/test_scheduler: tests/test_scheduler.c scheduler.c scheduler.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ tests/test_scheduler.c scheduler.c
+
+tests/test_config: tests/test_config.c config.c config.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ tests/test_config.c config.c
 
 .PHONY: all install uninstall clean test
