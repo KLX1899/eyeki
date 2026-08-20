@@ -45,7 +45,7 @@ Do not use `install.sh`. It compiles nonexistent `EyeKi.c`, creates an uppercase
 
 ## Tests, linting, formatting, and type checking
 
-`make test` builds and runs the desktop-independent scheduler and interval/config unit tests. The interval tests cover strict parsing, the 10- and 300-minute production boundaries, invalid values, and checked seconds conversion. The scheduler tests inject shorter durations directly rather than weakening production validation. There is no linter configuration, formatter configuration, static-analysis target, broader integration suite, or CI workflow. C has no separate type-check command; compilation is the current type/syntax check. Do not report checks as passing unless they ran in the active environment.
+`make test` builds and runs the desktop-independent scheduler and interval/config-persistence unit tests. Configuration coverage includes strict parsing, production boundaries, checked conversion, fresh-home creation, XDG precedence and legacy fallback, owner-only modes, atomic replacement, and failure cleanup/reporting. The scheduler tests inject shorter durations directly rather than weakening production validation. There is no linter configuration, formatter configuration, static-analysis target, broader integration suite, or CI workflow. C has no separate type-check command; compilation is the current type/syntax check. Do not report checks as passing unless they ran in the active environment.
 
 For every C change, run at least:
 
@@ -56,22 +56,25 @@ make
 ./eyeki --show-config
 ```
 
-Add focused automated coverage when extracting testable modules. Useful next targets are configuration round trips/failures, threshold transitions, clock behavior, and activity-provider error policy.
+Add focused automated coverage when extracting testable modules. Useful next targets are persisted mode diagnostics, concurrent configuration updates, threshold transitions, clock behavior, and activity-provider error policy.
 
 At the 2026-08-14 documentation audit, the host lacked a compiler, Make, required development metadata, Debian packaging tools, and Markdown linters. Compilation was therefore not validated. An existing ignored x86-64 executable was used only for isolated CLI observations; it is not release evidence.
 
 ## Safe configuration validation
 
-Use a disposable home so tests do not overwrite personal settings. The explicit `.config` creation works around the current parent-directory bug:
+Use a disposable home so tests do not overwrite personal settings. Do not create `.config` in advance; the save command should create all missing parents:
 
 ```sh
 test_home=$(mktemp -d)
-mkdir -p "$test_home/.config"
 env HOME="$test_home" ./eyeki --show-config
 env HOME="$test_home" ./eyeki --set-interval 10
 env HOME="$test_home" ./eyeki --set-mode n
 env HOME="$test_home" ./eyeki --show-config
+stat -c '%a %n' "$test_home/.config/eye_reminder" \
+  "$test_home/.config/eye_reminder/config"
 ```
+
+Expect modes `700` and `600`. Repeat with an absolute disposable `XDG_CONFIG_HOME` and confirm the file is created below that directory. If a legacy HOME config exists and the XDG file does not, `--show-config` should read the legacy values; the next successful setting change should create the XDG file without deleting or changing the legacy file.
 
 For the invalid-input path, first record the disposable config contents, run a value such as `--set-interval 9`, and confirm the command exits nonzero and the file is unchanged. Repeat with `300` to exercise the upper accepted boundary without starting the daemon.
 
@@ -104,7 +107,8 @@ The production CLI rejects intervals below ten minutes. Use the seconds-based sc
 | --- | --- | --- |
 | `CC`, `CPPFLAGS`, `CFLAGS`, `LDFLAGS`, `PKG_CONFIG` | Make | Standard tool/compiler overrides; warning flags are appended |
 | `PREFIX`, `DESTDIR`, `BINDIR`, `SYSTEMD_USER_DIR` | Make | Installation/staging paths |
-| `HOME` | Runtime | Sole base for config; no XDG override |
+| `HOME` | Runtime | Base for the default and legacy config path |
+| `XDG_CONFIG_HOME` | Runtime | Absolute override for the config base; relative values are ignored |
 | `DISPLAY`, `WAYLAND_DISPLAY` | GTK environment | Selected by GTK; EyeKi does not read them directly |
 | `DBUS_SESSION_BUS_ADDRESS` | libnotify environment | Usually inherited from the desktop session; not read directly |
 
@@ -114,7 +118,7 @@ No EyeKi-specific environment variables exist.
 
 - **`pkg-config` cannot find a module:** install the matching development package and confirm the `.pc` search path.
 - **Undefined `sd_bus_*`:** confirm the Makefile requests and links `libsystemd`, not `dbus-1`.
-- **Settings do not persist:** ensure the disposable/real `$HOME/.config` parent exists; the application ignores directory/write errors.
+- **A setting command reports a filesystem error:** inspect ownership and permissions only for the disposable/active XDG config path; saves do not fall back to HOME when an absolute XDG override is selected.
 - **Changed settings appear stale:** restart; reload happens only after the old timer threshold.
 - **Popup after a live mode change fails:** restart in popup mode so GTK initializes before use.
 - **Installed service cannot find the binary:** keep `ExecStart` aligned with `BINDIR`/`PREFIX`.

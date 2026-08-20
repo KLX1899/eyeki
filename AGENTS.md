@@ -5,7 +5,7 @@ Operational instructions for AI coding agents working in this repository. Read t
 ## Repository map
 
 - `eyeki.c` — CLI parsing, logind idle query, timer loop, libnotify reminder, and GTK popup.
-- `config.c`, `config.h` — `Config`, defaults, and load/save implementations.
+- `config.c`, `config.h` — `Config`, defaults, XDG/legacy path selection, loading, and atomic saving.
 - `scheduler.c`, `scheduler.h` — monotonic active-time state machine, independent of desktop libraries.
 - `tests/test_scheduler.c` — desktop-independent scheduler regression tests.
 - `Makefile` — build plus staged/system installation; output is `eyeki`.
@@ -20,7 +20,7 @@ There are no nested agent instructions, tests, CI workflows, localization catalo
 
 ## Architecture and data flow
 
-EyeKi is a single-process, single-threaded C program. `main()` loads `$HOME/.config/eye_reminder/config`, executes a one-shot CLI command or initializes one presentation backend, then polls every ten seconds. `get_idle_seconds()` queries systemd-logind over system D-Bus. Active elapsed wall time is accumulated until the configured threshold; the process then calls either `send_notification()` or blocking `show_popup()` and resets the counter.
+EyeKi is a single-process, single-threaded C program. `main()` loads the XDG configuration path (falling back to the legacy `$HOME/.config/eye_reminder/config` when needed), executes a one-shot CLI command or initializes one presentation backend, then polls every ten seconds. `get_idle_seconds()` queries systemd-logind over system D-Bus. Active elapsed wall time is accumulated until the configured threshold; the process then calls either `send_notification()` or blocking `show_popup()` and resets the counter.
 
 Important invariants and fragility:
 
@@ -58,7 +58,7 @@ systemctl --user enable --now eyeki.service
 
 At the 2026-08-14 documentation audit, the existing ignored x86-64 binary successfully ran `--help`, default `--show-config`, valid setting updates when an isolated `$HOME/.config` existed, and invalid-option paths. The host lacked a compiler, Make, development `.pc` files, Debian tools, and documentation linters, so compilation and packaging were not executed. Never convert this historical result into a current pass claim; run commands in the active environment.
 
-`make test` runs scheduler and interval/config unit tests. There are no configured lint, format, type-check, documentation-check, integration-test, or CI targets. Do not invent a passing check. For C changes, at minimum build with warnings enabled by the Makefile, run available unit tests, and manually exercise affected CLI/desktop behavior.
+`make test` runs scheduler and interval/config-persistence unit tests. There are no configured lint, format, type-check, documentation-check, integration-test, or CI targets. Do not invent a passing check. For C changes, at minimum build with warnings enabled by the Makefile, run available unit tests, and manually exercise affected CLI/desktop behavior.
 
 ## Code conventions
 
@@ -89,9 +89,9 @@ At the 2026-08-14 documentation audit, the existing ignored x86-64 binary succes
 
 ### Settings and persistence
 
-- Current format is two plain-text `key=value` lines at `$HOME/.config/eye_reminder/config`.
+- Current format is two plain-text `key=value` lines at `$XDG_CONFIG_HOME/eye_reminder/config` when the override is absolute, or `$HOME/.config/eye_reminder/config` otherwise.
 - Preserve unknown keys if evolving the format, or introduce an explicit migration/version strategy.
-- Honor XDG locations before changing the documented path; create parent directories safely and write atomically with owner-only permissions.
+- Preserve the non-destructive legacy fallback when changing XDG path behavior; create parent directories safely and write atomically with owner-only permissions.
 - Report save/parse failures. Never log unrelated environment values or config file contents.
 - Restart the daemon during manual validation after setting changes until hot reload is fixed.
 

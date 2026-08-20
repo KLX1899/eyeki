@@ -12,12 +12,12 @@ Likely users are Linux desktop users whose healthcare guidance already tells the
 - The configurable interval defaults to 60 minutes and accepts whole decimal values from 10 through 300 minutes.
 - The default mode is a GTK 3 fullscreen popup; notification mode uses libnotify.
 - The loop polls every ten seconds and uses monotonic elapsed time while reported idle time is below 60 seconds. Reaching the idle threshold or losing a trustworthy idle-state result resets accumulated active time.
-- Settings persist as `interval=<integer>` and `mode=popup|notification` under `$HOME/.config/eye_reminder/config`.
+- Settings persist as `interval=<integer>` and `mode=popup|notification` under an absolute `$XDG_CONFIG_HOME/eye_reminder/config`, or `$HOME/.config/eye_reminder/config` when no valid override is set.
 - CLI operations are `--help`, `--version`, `--show-config`, `--set-interval <min>`, `--set-mode n|p`, and `--daemon`.
 - systemd-logind supplies idle metadata through system D-Bus.
 - A systemd user unit and preliminary Debian metadata exist locally.
 
-The repository provides scheduler and interval/config unit tests but no broader test suite, settings UI, snooze, reminder history, tray icon, network service, telemetry, localization catalog, automatic update mechanism, release automation, or verifiable published release.
+The repository provides scheduler and interval/config-persistence unit tests but no broader test suite, settings UI, snooze, reminder history, tray icon, network service, telemetry, localization catalog, automatic update mechanism, release automation, or verifiable published release.
 
 EyeKi is intentionally configured through the CLI. A graphical settings application is not a product goal. Presentation remains an exclusive choice: notification XOR popup. The two modes must never be emitted together for one reminder.
 
@@ -34,9 +34,9 @@ Changing any of these boundaries requires explicit product, privacy, security, a
 
 ## Current technical state
 
-The project is an early Linux prototype with separate configuration and scheduler modules plus preliminary local build/packaging files. It has no release tags or CI (automated builds and checks that run on repository changes). Scheduler and interval/config tests exist but have no current pass evidence because the active environment lacks a compiler and Make. The existing ignored binary demonstrates the older one-shot CLI but is not a trustworthy release artifact. A one-shot CLI command performs one operation, such as changing or printing a setting, and then exits; it does not enter the long-running reminder loop. The source archive and Debian metadata are not release-ready.
+The project is an early Linux prototype with separate configuration and scheduler modules plus preliminary local build/packaging files. It has no release tags or CI (automated builds and checks that run on repository changes). The scheduler and interval/config-persistence suites passed with a disposable GCC 15/Make toolchain on 2026-08-20, but the host lacks installed build tools and desktop development packages, so the full application build remains unverified in that environment. The existing ignored binary demonstrates the older one-shot CLI but is not a trustworthy release artifact. A one-shot CLI command performs one operation, such as changing or printing a setting, and then exits; it does not enter the long-running reminder loop. The source archive and Debian metadata are not release-ready.
 
-Important correctness gaps include fragile session selection, silent persistence/notification failures, delayed settings reload, permissive mode parsing, and unsafe runtime switching into popup mode. “Fragile session selection” means EyeKi accepts the first session returned by logind instead of proving that it is the current user's relevant graphical session. On a machine with two signed-in users, an SSH session, or multiple seats, the first result may belong to somebody else, so EyeKi may reset or advance the timer using the wrong person's idle state. Elapsed scheduling and logind idle timestamps use a monotonic clock, and interval input is now range-checked before overflow-safe conversion, but the implementation still needs build and runtime evidence on supported Ubuntu sessions.
+Important correctness gaps include fragile session selection, silent notification and configuration-read failures, delayed settings reload, permissive mode parsing, concurrent settings-update races, and unsafe runtime switching into popup mode. “Fragile session selection” means EyeKi accepts the first session returned by logind instead of proving that it is the current user's relevant graphical session. On a machine with two signed-in users, an SSH session, or multiple seats, the first result may belong to somebody else, so EyeKi may reset or advance the timer using the wrong person's idle state. Elapsed scheduling and logind idle timestamps use a monotonic clock, interval input is range-checked before overflow-safe conversion, and settings writes are private and atomic, but the implementation still needs full build and runtime evidence on supported Ubuntu sessions.
 
 See [Architecture](ARCHITECTURE.md), [Repository audit](REPOSITORY_AUDIT.md), and [Roadmap](ROADMAP.md).
 
@@ -51,8 +51,8 @@ See [Architecture](ARCHITECTURE.md), [Repository audit](REPOSITORY_AUDIT.md), an
 - **Daemon mode:** the foreground infinite loop. EyeKi does not daemonize itself; systemd supervises it when installed.
 - **Configuration:** the local two-line plain-text file, not compile-time settings.
 - **Presentation backend:** the local implementation used to present a reminder—currently GTK for popup or libnotify for notification. “Backend” here does not mean a web server or remote service.
-- **XDG configuration path:** the freedesktop.org convention that uses `$XDG_CONFIG_HOME` when set and otherwise defaults to `$HOME/.config`. Adopting it would give EyeKi a standard, overrideable config location and requires a migration plan for the current file.
-- **Atomic owner-private write:** write a complete new config to a temporary file accessible only to its owner, flush/check it, and atomically rename it over the old file. Readers then see either the old complete file or the new complete file, not a half-written file; symlink and permission checks are still required.
+- **XDG configuration path:** EyeKi uses `$XDG_CONFIG_HOME` when it is non-empty and absolute, and otherwise uses `$HOME/.config`. With an active override and no XDG config, it reads the legacy `$HOME/.config/eye_reminder/config` file; the next successful setting change writes only the XDG path and leaves the legacy file untouched.
+- **Atomic owner-private write:** EyeKi writes a complete config to a temporary `0600` file in its `0700` application directory, flushes and syncs it, and atomically renames it over the old file. Readers then see either the old complete file or the new complete file; symlinked application directories are rejected.
 
 ## Confirmed design decisions
 
@@ -75,7 +75,7 @@ See [Architecture](ARCHITECTURE.md), [Repository audit](REPOSITORY_AUDIT.md), an
 
 - Establish a reliable monotonic scheduler and current-session resolver before polishing packages.
 - Separate configuration, scheduling, platform integration, and presentation into testable modules.
-- Adopt XDG paths, validation, atomic owner-private writes, and explicit errors.
+- Keep XDG migration, validation, atomic owner-private writes, and explicit save errors covered by regression tests.
 - Add a localization boundary before adding languages or customizable text: move Persian strings out of control flow, support RTL layout, define fallback behavior, and make strings extractable. Accessibility work means keyboard operation, screen-reader labels, focus order, scaling, contrast, and a reliable dismissal path for reminder UI; it does not imply adding a graphical settings screen.
 - Keep the application local-only and minimize persisted information.
 - Treat each distro package, Flatpak, and Snap as a separate deliverable after a tested upstream release exists. Each format has different metadata, dependency, sandbox-permission, update, signing, and store-review requirements, so one passing package does not prove the others work.
@@ -92,7 +92,7 @@ See [Architecture](ARCHITECTURE.md), [Repository audit](REPOSITORY_AUDIT.md), an
 - GTK 3 and the current global/manual event-loop design make it harder to replace or independently test the two local presentation backends (popup and notification), handle multiple monitor windows, or port presentation to another OS. This is unrelated to a web backend.
 - logind session idle reporting depends on desktop/session integration and may not represent actual input activity.
 - Distribution sandboxes such as Snap and Flatpak may restrict logind queries on the system bus. The initial Ubuntu `.deb` can avoid that sandbox mismatch; later sandboxed packages need narrowly reviewed permissions or a different activity provider and must be tested against current store policy.
-- Scheduler regression tests describe injected short intervals, threshold, idle reset, unknown-state reset, and clock-discontinuity behavior. Interval/config tests describe production boundaries, malformed values, and seconds conversion. They have not run in the active environment and are not enforced by CI; other behavior still lacks repeatable automated evidence.
+- Scheduler regression tests cover injected short intervals, threshold, idle reset, unknown-state reset, and clock-discontinuity behavior. Interval/config tests cover production boundaries, malformed values, seconds conversion, XDG/legacy selection, private atomic round trips, and save failures. They are not enforced by CI; broader desktop behavior still lacks repeatable automated evidence.
 - At the documentation audit, some packaging artifacts were ignored or untracked. Such files may be missing from a clone, may contain stale/generated machine-specific content, and cannot be reliably reviewed or reproduced. Authoritative packaging source must be tracked; generated binaries and archives must remain excluded and be rebuilt from a clean tagged checkout.
 
 ## Start here for a new AI session

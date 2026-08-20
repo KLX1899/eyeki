@@ -17,6 +17,7 @@ All notable changes should be documented here. The format follows Keep a Changel
 - Extracted configuration and monotonic scheduling into separate C modules.
 - Enforced strict 10–300 minute interval input and overflow-safe conversion before scheduling.
 - Changed away/unknown activity handling to discard accumulated active time instead of preserving or advancing it.
+- Adopted the XDG config location with a non-destructive legacy fallback, automatic private parent creation, atomic `0600` writes, and CLI-visible save failures.
 - Corrected the Makefile's D-Bus provider from `dbus-1` to `libsystemd`, matching the source's `sd-bus` API.
 - Updated ignore rules so source packaging metadata can be tracked while build binaries and generated source archives remain ignored.
 

@@ -328,7 +328,10 @@ int main(int argc, char *argv[]) {
             }
 
             cfg.interval_minutes = interval_minutes;
-            save_config(&cfg);
+            if (!save_config(&cfg)) {
+                perror("eyeki");
+                return 1;
+            }
             printf("Interval set to %d minutes.\n", cfg.interval_minutes);
             return 0;
 
@@ -343,7 +346,10 @@ int main(int argc, char *argv[]) {
                 fprintf(stderr, "Invalid mode: %s\n", argv[i]);
                 return 1;
             }
-            save_config(&cfg);
+            if (!save_config(&cfg)) {
+                perror("eyeki");
+                return 1;
+            }
             if (strcmp(argv[i], "p") == 0) {
                 printf("Mode set to: popup\n");
             }

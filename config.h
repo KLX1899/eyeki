@@ -19,7 +19,8 @@ typedef struct {
 
 Config default_config(void);
 Config load_config(void);
-void save_config(const Config *cfg);
+/* Returns false and leaves the filesystem failure in errno. */
+bool save_config(const Config *cfg);
 bool parse_interval_minutes(const char *value, int *interval_minutes);
 bool interval_minutes_to_seconds(int interval_minutes, uint64_t *seconds);
 

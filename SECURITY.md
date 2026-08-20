@@ -30,7 +30,7 @@ No acknowledgement or remediation deadline is promised yet. The maintainer shoul
 
 ## Security-sensitive scope
 
-- Parsing and writing `$HOME/.config/eye_reminder/config`, including symlink/race/permission behavior.
+- Parsing and writing the XDG or legacy HOME config path, including migration, symlink/race, and permission behavior.
 - Integer parsing/arithmetic that can create reminder storms or denial of service.
 - system D-Bus queries to logind and selection/exposure of session metadata.
 - GTK fullscreen/focus/dismissal behavior and user ability to exit.
@@ -42,7 +42,7 @@ EyeKi source contains no network client, account system, telemetry, updater, or 
 
 ## Local data and OS integration
 
-Current settings are plain text. The directory is requested as `0755`; file permissions depend on umask; writes are non-atomic and errors are ignored. EyeKi should move to owner-private, atomic, symlink-safe persistence with explicit failures.
+Current settings are plain text. EyeKi creates missing parents privately, enforces `0700` on its application directory, writes through an exclusive `0600` temporary file, and syncs before and after atomic rename. It rejects symlinked application-directory components, and CLI setting commands exit nonzero on save failure. Existing parent-directory policy, silent read/parse fallback, concurrent lost updates, and retained legacy files remain in security scope.
 
 Idle lookup reads records returned by logind, including session metadata, but the code does not persist or intentionally log those records. D-Bus failures currently become “active” and can produce reminders at inappropriate times. The service logs interval/mode at startup to stderr/user journal.
 

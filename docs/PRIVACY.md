@@ -11,9 +11,11 @@ EyeKi stores two settings in plain text:
 - reminder interval as an integer;
 - mode as `popup` or `notification`.
 
-The hard-coded path is `$HOME/.config/eye_reminder/config`. The source does not store reminder history, timestamps, completed-dose records, medication names, screen content, input events, account identifiers, or analytics.
+The path is `$XDG_CONFIG_HOME/eye_reminder/config` when the override is absolute, or `$HOME/.config/eye_reminder/config` otherwise. The source does not store reminder history, timestamps, completed-dose records, medication names, screen content, input events, account identifiers, or analytics.
 
-The config directory creation requests mode `0755`; config file mode depends on the process umask. The write is not atomic. When `$HOME/.config` is absent, persistence fails silently.
+Missing config parents are created with owner-only access. The EyeKi directory is enforced as `0700`; complete settings are written and synced through a `0600` temporary file before atomic replacement. Symlinked directory components are rejected. Save failures reach the CLI without logging the selected path or file contents.
+
+With an active XDG override and no XDG config, EyeKi reads the legacy HOME config. A later successful settings change writes the XDG file and leaves the legacy file untouched, so both copies can remain until the user deliberately removes the legacy one.
 
 ### Data processed but not intentionally retained
 
@@ -44,7 +46,7 @@ Reminder text is hard-coded in Persian and mentions artificial tears. This can r
 ## Current privacy risks
 
 - The first logind session may belong to another local user; even though fields are not retained, querying/acting on the wrong session is a privacy and correctness concern.
-- Config/journal access may be broader or longer-lived than users expect because permissions/retention are delegated to umask and OS policy.
+- Existing XDG parent directories and journal retention remain governed by OS/user policy; a legacy HOME config can retain its earlier permissions after non-destructive migration.
 - Notifications may expose reminder content on locked/shared displays.
 - Silent integration failures prevent users from knowing which session/data path is active.
 - Bug reports can accidentally include usernames, paths, session IDs, unrelated journal records, or desktop screenshots.
@@ -57,7 +59,7 @@ These are recommendations, not implemented features:
 - Keep EyeKi local-only and telemetry-free by default.
 - Collect/persist only settings needed for scheduling; do not add medication/adherence history without explicit product need, consent, retention, export/delete controls, and legal review.
 - Select only the current user's intended session and minimize D-Bus fields processed.
-- Honor XDG paths, create owner-private directories/files, use atomic/symlink-safe writes, and surface errors.
+- Keep XDG migration and private atomic writes covered by regression tests; do not expose paths or contents in failure diagnostics.
 - Offer privacy-conscious notification wording and document how desktop lock-screen previews can be disabled.
 - Rate-limit and redact logs; never log usernames, session IDs, home paths, environment blocks, or full config files by default.
 - Make any diagnostic export explicit, previewable, minimal, and redact identifiers automatically.

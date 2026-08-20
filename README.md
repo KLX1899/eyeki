@@ -2,7 +2,7 @@
 
 EyeKi is a small Linux reminder daemon that counts active session time and prompts the user to apply eye drops. It can send a desktop notification or display a fullscreen GTK popup.
 
-> **Status:** early, pre-release prototype. Scheduler and interval/config unit tests exist but have not yet run in the current incomplete toolchain; there are no verifiable tagged releases, CI workflows, or production-ready packages. Configuration persistence, session detection, localization, and packaging need work before general distribution. See the [roadmap](docs/ROADMAP.md).
+> **Status:** early, pre-release prototype. Scheduler and interval/config-persistence unit tests exist, but there are no verifiable tagged releases, CI workflows, or production-ready packages. Session detection, live settings reload, presentation lifecycle, localization, and packaging need work before general distribution. See the [roadmap](docs/ROADMAP.md).
 
 EyeKi only provides configurable reminders; the repository contains no clinical validation or medical guidance. Users should choose an interval appropriate to guidance from their healthcare professional.
 
@@ -56,7 +56,7 @@ make
 
 `make clean` removes the local `eyeki` build output. The build command is defined by the repository Makefile, but it is not yet exercised by CI.
 
-`make test` builds and runs the desktop-independent scheduler and interval/config unit tests.
+`make test` builds and runs the desktop-independent scheduler and interval/config-persistence unit tests.
 
 For a system-wide install, inspect `eyeki.service` first, then run with suitable privileges:
 
@@ -89,7 +89,9 @@ Use a whole number from 10 through 300 minutes (five hours). Values outside that
 ./eyeki --show-config
 ```
 
-`n` selects desktop notifications and `p` selects the fullscreen popup. Settings are stored at `$HOME/.config/eye_reminder/config`; XDG configuration overrides are not supported. The parent `$HOME/.config` directory must already exist or the current save implementation silently fails.
+`n` selects desktop notifications and `p` selects the fullscreen popup. If `XDG_CONFIG_HOME` is non-empty and absolute, settings are stored at `$XDG_CONFIG_HOME/eye_reminder/config`; otherwise EyeKi uses `$HOME/.config/eye_reminder/config`. Missing parents are created. The EyeKi directory is restricted to `0700`, and each complete configuration is written to a `0600` temporary file before an atomic replacement. A save error is printed and the setting command exits nonzero instead of reporting success.
+
+When an XDG override is active but its EyeKi config does not exist, EyeKi reads the legacy `$HOME/.config/eye_reminder/config` file. The next successful setting change writes the complete configuration to the XDG path and leaves the legacy file untouched. Relative `XDG_CONFIG_HOME` values are ignored.
 
 The intended behavior is that every successful settings change takes effect promptly and resets accumulated active time to zero, after which counting restarts under the new complete configuration. The current prototype does not implement that behavior: it reloads only when the old interval reaches its trigger point, and switching from notification to popup while running is unsafe because GTK is initialized only for popup startup. Restart EyeKi after changing either setting until live reload is fixed.
 
@@ -97,7 +99,7 @@ Persian is the initial product language. The current messages are hard-coded and
 
 ## Troubleshooting
 
-- **Settings report success but revert:** make sure `$HOME/.config` exists and check `$HOME/.config/eye_reminder/config`.
+- **A setting command exits with a filesystem error:** check ownership and permissions for the active XDG config path, or `$HOME/.config` when no absolute XDG override is set.
 - **No notification appears:** confirm the desktop notification service is running and inspect stderr or the user journal. Delivery failures are currently not surfaced by EyeKi.
 - **Popup cannot open:** start EyeKi inside the intended graphical session and check the display environment. GTK initialization can terminate when no display is available.
 - **Timer behaves unexpectedly around session changes:** current D-Bus logic inspects the first logind session, not reliably the process owner's active session. D-Bus failures reset the timer because activity cannot be established reliably.
@@ -110,11 +112,11 @@ The source contains no network client or telemetry. It stores only the interval 
 
 ## Known limitations
 
-- Scheduler and interval/config unit tests exist, but there is no current pass evidence, broader automated coverage, linting, formatting check, CI, or verified release process.
+- Scheduler and interval/config-persistence unit tests exist, but there is no broader automated coverage, linting, formatting check, CI, or verified release process.
 - Invalid persisted interval values are ignored so they cannot replace the default or a preceding valid value; other malformed configuration fields are not diagnosed.
 - Idle detection can select the wrong login session; lookup errors reset progress until detection recovers.
 - Closing the popup through the window manager can leave its manual event loop running.
-- Notification errors and configuration-write errors are ignored.
+- Notification errors and configuration-read/parse errors are ignored; concurrent one-shot settings changes can still overwrite one another's fields.
 - Accessibility, right-to-left layout, translations, and Wayland behavior are untested.
 - Debian packaging, the source archive, and the systemd integration are preliminary.
 

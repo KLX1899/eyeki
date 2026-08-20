@@ -4,7 +4,7 @@ The first public-release target is Ubuntu. The intended end-user experience is a
 
 ## Readiness assessment
 
-EyeKi is not ready for a public binary release or submission to a distribution repository. The source is pre-release, has only an unverified scheduler unit-test suite, no CI or Git tags, and contains P0 persistence, settings-reload, session-selection, popup, and error-handling defects. Packaging work exists but was untracked or ignored at the documentation audit.
+EyeKi is not ready for a public binary release or submission to a distribution repository. The source is pre-release, has no CI or Git tags, and still contains P0 settings-reload, session-selection, popup, notification, and packaging defects. Packaging work exists but was untracked or ignored at the documentation audit.
 
 ## Current packaging capability
 
