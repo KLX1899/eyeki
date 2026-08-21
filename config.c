@@ -370,6 +370,10 @@ Config default_config(void) {
     return cfg;
 }
 
+bool config_get_path(char *path, size_t path_size) {
+    return build_config_path(path, path_size, false, NULL);
+}
+
 bool parse_interval_minutes(const char *value, int *interval_minutes) {
     char *end;
     long parsed;

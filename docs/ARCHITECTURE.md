@@ -9,6 +9,8 @@ flowchart LR
     CLI[CLI arguments] --> Main[main in eyeki.c]
     File[Local config file] <--> Config[load_config / save_config]
     Config --> Main
+    File -->|inotify replacement event| Watch[Config watch]
+    Watch -->|reload and reset| Main
     Main -->|one-shot command| Exit[Print result and exit]
     Main -->|daemon loop| Timer[10-second polling loop]
     Timer --> Idle[get_idle_seconds]
@@ -23,12 +25,14 @@ flowchart LR
 
 | Location | Responsibility | Important limitations |
 | --- | --- | --- |
-| `main()` in `eyeki.c` | Parse CLI, initialize one UI backend, sample activity, reload settings at a trigger, dispatch reminders | Infinite foreground loop; backend initialization and reload can disagree |
+| `main()` in `eyeki.c` | Parse CLI, initialize one UI backend, poll activity and configuration events, dispatch reminders | Infinite foreground loop; backend initialization and reload can disagree |
 | `get_idle_seconds()` | Open system bus, list logind sessions, query idle properties | Always uses first session; recreates bus connection every poll; errors become “active” |
 | `send_notification()` | Initialize libnotify lazily and request a ten-second notification | Return values/errors ignored; hard-coded message |
 | `show_popup()` and callback | Build fullscreen window and block in a manual GTK event loop until button click | Window-manager close is not handled; global mutable state; compositor-dependent |
 | `config.c` / `config.h` | Define `Config`, defaults, strict interval parsing/conversion, XDG/legacy selection, and private atomic saving | Mode parsing is permissive; read/parse errors are silent; concurrent complete-config updates can lose fields |
-| `scheduler.c` / `scheduler.h` | Accumulate monotonic active time, reset on idle/unknown state, and report threshold crossing | Receives ten-second samples; immediate config-change observation is not implemented |
+| `config_watch.c` / `config_watch.h` | Observe the selected primary config path and its nearest existing parent with Linux inotify | Coalesces rapid replacements into the latest complete configuration |
+| `runtime.c` / `runtime.h` | Install a complete configuration with its monotonic scheduler state and reset elapsed time on reload | Presentation-backend readiness remains outside this boundary |
+| `scheduler.c` / `scheduler.h` | Accumulate monotonic active time, reset on idle/unknown state, and report threshold crossing | Receives ten-second activity samples |
 | `Makefile` | Compile with GTK/libnotify/libsystemd; run desktop-independent unit tests; install binary and unit | No debug/lint/package targets |
 | `eyeki.service` | Run `/usr/bin/eyeki --daemon` as a user service and restart failures | Fixed installed path; no hardening or graphical-session binding beyond ordering |
 | `debian/` | Preliminary Debian source-package metadata | Unverified, incomplete, and version/attribution review required |
@@ -42,9 +46,10 @@ flowchart LR
    - `--help` prints usage and exits.
    - `--daemon` is a no-op marker; no arguments behave identically.
    - Unknown or incomplete options print an error/usage and exit nonzero.
-3. Popup startup calls `gtk_init`; notification startup calls `notify_init` without checking success.
-4. The process logs its interval/mode to stderr and enters the reminder loop.
-5. The loop ends only through external process termination or a fatal library failure.
+3. Daemon startup creates an inotify watch for the primary configuration path, reloads once to close the load/watch race, and installs the complete configuration in runtime state.
+4. Popup startup calls `gtk_init`; notification startup calls `notify_init` without checking success.
+5. The process logs its interval/mode to stderr and enters the reminder loop.
+6. The loop ends only through external process termination or a fatal library failure.
 
 ## Reminder and timer lifecycle
 
@@ -52,22 +57,24 @@ flowchart LR
 stateDiagram-v2
     [*] --> LoadSettings
     LoadSettings --> InitializeBackend
-    InitializeBackend --> Sleep
-    Sleep --> QueryIdle: after 10 seconds
+    InitializeBackend --> Wait
+    Wait --> ReloadSettings: config replacement
+    ReloadSettings --> ResetCount
+    ResetCount --> Wait
+    Wait --> QueryIdle: after 10 seconds
     QueryIdle --> Accumulate: idle less than 60 seconds
     QueryIdle --> ResetActive: idle at least 60 seconds or lookup failed
     Accumulate --> CheckThreshold
     ResetActive --> CheckThreshold
-    CheckThreshold --> Sleep: below startup/current threshold
-    CheckThreshold --> ReloadSettings: threshold reached
-    ReloadSettings --> Notify: notification mode
-    ReloadSettings --> Popup: popup mode
+    CheckThreshold --> Wait: below current threshold
+    CheckThreshold --> Notify: notification mode
+    CheckThreshold --> Popup: popup mode
     Notify --> ResetCount
     Popup --> ResetCount: Done button clicked
-    ResetCount --> Sleep
+    ResetCount --> Wait
 ```
 
-The extracted scheduler accumulates differences between `CLOCK_MONOTONIC` samples. Idle or unknown activity state resets progress to zero. Settings are still reloaded only after comparison with the previously loaded interval, so changes are not immediately observed.
+The extracted scheduler accumulates differences between `CLOCK_MONOTONIC` samples. Idle or unknown activity state resets progress to zero. The daemon polls the inotify descriptor until the next ten-second activity deadline, so an atomic settings replacement wakes it without waiting for either the activity poll or old reminder threshold. Runtime reload validates and installs the complete configuration together, resets active time at the reload's monotonic timestamp, and continues counting from there. Multiple replacements already queued when the daemon wakes are coalesced into the latest complete configuration.
 
 ## Idle detection
 
@@ -81,13 +88,15 @@ Notification mode creates `NotifyNotification`, sets normal urgency and a reques
 
 Popup mode creates an undecorated fullscreen, keep-above `GtkWindow`, places Persian labels and a button over a dark background, then pumps GTK events every 50 ms. Only the button callback changes `popup_dismissed`; a window-manager close can leave the loop alive. Focus, stacking, fullscreen, and multi-monitor behavior are not verified and can vary by compositor.
 
-Runtime mode changes are fragile: if the process started in notification mode and reloads popup mode at a trigger, it calls GTK functions without prior `gtk_init`. Until fixed, restart the process after changing mode.
+Runtime mode changes are fragile: if the process started in notification mode and reloads popup mode, the next reminder calls GTK functions without prior `gtk_init`. Until fixed, restart the process after switching into popup mode.
 
 ## Configuration and persistence flow
 
 The default is `interval_minutes = 60`, `MODE_POPUP`. Interval values must contain only decimal digits and fall within the inclusive 10–300 minute production range. CLI values that fail validation exit nonzero before saving; persisted invalid interval values are ignored rather than replacing the default or a preceding valid value. A checked conversion produces scheduler seconds after validating the range, while scheduler tests can inject shorter durations directly. `load_config()` ignores unknown keys and still maps every non-`popup` mode string to notification without diagnosing malformed modes.
 
 An absolute, non-empty `XDG_CONFIG_HOME` selects `$XDG_CONFIG_HOME/eye_reminder/config`; otherwise the path is `$HOME/.config/eye_reminder/config`. Relative XDG overrides are ignored. When the XDG file is absent, `load_config()` reads the legacy HOME path without modifying it. A later successful setting change writes only the XDG path, providing a non-destructive migration.
+
+The daemon watches that selected primary path. If its parent directories do not exist yet, it watches the nearest existing ancestor and moves the watch inward after creation events. Atomic rename gives each successful settings command a distinct file identity, including commands that save values identical to the current configuration. Deleting or replacing the file is also observed. The popup's manual GTK loop checks the same inotify descriptor every 50 milliseconds, so an open acknowledgement window does not defer a configuration reload.
 
 `save_config()` safely walks and creates missing parent directories without following symlinked directory components. Newly created parents and the EyeKi directory use owner-only access; an existing EyeKi directory is tightened to `0700`. It writes the full configuration to an exclusive `0600` temporary file, flushes and syncs it, atomically renames it to `config`, and syncs the directory. Concurrent one-shot processes can still load the same old configuration and replace one another's field updates; service-aware coordination remains separate work.
 
@@ -120,7 +129,7 @@ No direct network or remote service dependency exists in the source.
 ## Recommended future boundaries
 
 1. **Configuration:** pure parsing/validation model plus platform path and atomic storage adapters.
-2. **Scheduler:** monotonic time and explicit events (`active`, `idle`, `unknown`, `settings changed`) independent of D-Bus/GTK.
+2. **Scheduler/runtime:** monotonic time and explicit events (`active`, `idle`, `unknown`, `settings changed`) independent of D-Bus/GTK.
 3. **Activity provider:** Linux logind implementation that selects the correct session and exposes errors.
 4. **Presentation:** notification and popup interfaces initialized independently, with accessible lifecycle/error contracts.
 5. **Application/service:** CLI, process signals, live reload policy, logging, and dependency wiring.

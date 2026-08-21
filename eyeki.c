@@ -4,23 +4,87 @@
 #include <time.h>
 #include <string.h>
 #include <stdbool.h>
+#include <errno.h>
 #include <limits.h>
+#include <poll.h>
 #include <systemd/sd-bus.h>
 #include <libnotify/notify.h>
 #include <gtk/gtk.h>
 #include "config.h"
+#include "config_watch.h"
+#include "runtime.h"
 #include "scheduler.h"
 #include "version.h"
 
 /* If the user has been idle for this long (in seconds), discard accumulated
    active time and require a fresh continuous-use interval. */
 #define IDLE_THRESHOLD_SEC 60
+#define ACTIVITY_SAMPLE_INTERVAL_SEC 10
 
 // Global reference to the popup window so the button callback can destroy it.
 static GtkWidget *popup_window = NULL;
 
 // Flag set to 1 when the user clicks "Done" to break the popup event loop.
 static int popup_dismissed = 0;
+
+static bool reload_config(
+    ConfigWatch *config_watch,
+    RuntimeState *runtime,
+    struct timespec now
+) {
+    bool changed;
+    Config config;
+
+    if (!config_watch_process(config_watch, &changed)) {
+        return false;
+    }
+    if (!changed) {
+        return true;
+    }
+
+    config = load_config();
+    if (!runtime_state_reload(runtime, config, now)) {
+        errno = EINVAL;
+        return false;
+    }
+    return true;
+}
+
+static bool timespec_at_or_after(
+    struct timespec value,
+    struct timespec boundary
+) {
+    return value.tv_sec > boundary.tv_sec ||
+        (value.tv_sec == boundary.tv_sec &&
+         value.tv_nsec >= boundary.tv_nsec);
+}
+
+static int milliseconds_until(
+    struct timespec deadline,
+    struct timespec now
+) {
+    uint64_t milliseconds;
+    time_t seconds;
+    long nanoseconds;
+
+    if (timespec_at_or_after(now, deadline)) {
+        return 0;
+    }
+
+    seconds = deadline.tv_sec - now.tv_sec;
+    nanoseconds = deadline.tv_nsec - now.tv_nsec;
+    if (nanoseconds < 0) {
+        seconds--;
+        nanoseconds += 1000000000L;
+    }
+
+    if ((uint64_t)seconds > (uint64_t)INT_MAX / 1000ULL) {
+        return INT_MAX;
+    }
+    milliseconds = (uint64_t)seconds * 1000ULL;
+    milliseconds += ((uint64_t)nanoseconds + 999999ULL) / 1000000ULL;
+    return milliseconds > INT_MAX ? INT_MAX : (int)milliseconds;
+}
 
 /* get_idle_seconds()
  *
@@ -206,8 +270,19 @@ static void on_button_clicked(GtkWidget *widget, gpointer data) {
  *
  * The function runs a manual GTK event loop (instead of gtk_main()) so
  * that control returns to the daemon loop as soon as the popup is dismissed.
+ * It also services config-watch events so settings reload while the window
+ * remains open. Returns false if event processing fails.
  */
-void show_popup() {
+static bool show_popup(
+    ConfigWatch *config_watch,
+    RuntimeState *runtime
+) {
+    struct pollfd watched_config = {
+        .fd = config_watch_fd(config_watch),
+        .events = POLLIN,
+        .revents = 0
+    };
+
     popup_dismissed = 0;
 
     // Create an undecorated, always-on-top fullscreen window.
@@ -267,10 +342,39 @@ void show_popup() {
     /* Manual event loop: process GTK events until the user clicks "Done".
      * usleep(50000) = 50 ms between iterations to avoid busy-waiting. */
     while (!popup_dismissed) {
+        int poll_result;
+
         while (gtk_events_pending())
             gtk_main_iteration();
+
+        watched_config.revents = 0;
+        poll_result = poll(&watched_config, 1, 0);
+        if (poll_result < 0 && errno != EINTR) {
+            goto failure;
+        }
+        if (watched_config.revents & POLLIN) {
+            struct timespec now;
+
+            if (clock_gettime(CLOCK_MONOTONIC, &now) < 0 ||
+                !reload_config(config_watch, runtime, now)) {
+                goto failure;
+            }
+        }
+        if (watched_config.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+            errno = EIO;
+            goto failure;
+        }
         usleep(50000);
     }
+    return true;
+
+failure:
+    popup_dismissed = 1;
+    if (popup_window) {
+        gtk_widget_destroy(popup_window);
+        popup_window = NULL;
+    }
+    return false;
 }
 
 /* print_usage()
@@ -383,6 +487,15 @@ int main(int argc, char *argv[]) {
 
     /* --- Daemon initialisation --- */
 
+    ConfigWatch *config_watch = config_watch_create();
+    if (!config_watch) {
+        perror("eyeki");
+        return 1;
+    }
+
+    /* Close the load/watch race by loading again after the watch exists. */
+    cfg = load_config();
+
     /* GTK must be initialised before any window is created.
      * libnotify does not need GTK, so we only init what we actually need. */
     if (cfg.mode == MODE_POPUP) {
@@ -395,34 +508,75 @@ int main(int argc, char *argv[]) {
         cfg.interval_minutes,
         cfg.mode == MODE_POPUP ? "popup" : "notification");
 
-    Scheduler scheduler;
+    RuntimeState runtime;
     struct timespec monotonic_now;
-    uint64_t interval_seconds;
+    struct timespec next_activity_sample;
+    struct pollfd watched_config = {
+        .fd = config_watch_fd(config_watch),
+        .events = POLLIN,
+        .revents = 0
+    };
     bool activity_error_reported = false;
 
-    if (!interval_minutes_to_seconds(
-            cfg.interval_minutes,
-            &interval_seconds
-        ) ||
-        clock_gettime(CLOCK_MONOTONIC, &monotonic_now) < 0 ||
-        !scheduler_init(
-            &scheduler,
-            interval_seconds,
-            monotonic_now
-        )) {
+    if (clock_gettime(CLOCK_MONOTONIC, &monotonic_now) < 0 ||
+        !runtime_state_init(&runtime, cfg, monotonic_now)) {
         fprintf(stderr, "Failed to initialize reminder scheduler.\n");
+        config_watch_destroy(config_watch);
         return 1;
     }
+    next_activity_sample = monotonic_now;
+    next_activity_sample.tv_sec += ACTIVITY_SAMPLE_INTERVAL_SEC;
 
     // --- Main daemon loop ---
     while (1) {
-        /* Sleep between checks to avoid wasting CPU.
-         * 10 s gives ~6 checks per minute which is precise enough. */
-        sleep(10);
+        if (clock_gettime(CLOCK_MONOTONIC, &monotonic_now) < 0) {
+            fprintf(stderr, "Failed to read monotonic clock.\n");
+            config_watch_destroy(config_watch);
+            return 1;
+        }
+
+        watched_config.revents = 0;
+        int poll_result = poll(
+            &watched_config,
+            1,
+            milliseconds_until(next_activity_sample, monotonic_now)
+        );
+        if (poll_result < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            perror("eyeki");
+            config_watch_destroy(config_watch);
+            return 1;
+        }
 
         if (clock_gettime(CLOCK_MONOTONIC, &monotonic_now) < 0) {
             fprintf(stderr, "Failed to read monotonic clock.\n");
+            config_watch_destroy(config_watch);
             return 1;
+        }
+
+        if (watched_config.revents & POLLIN) {
+            if (!reload_config(
+                    config_watch,
+                    &runtime,
+                    monotonic_now
+                )) {
+                perror("eyeki");
+                config_watch_destroy(config_watch);
+                return 1;
+            }
+        }
+
+        if (watched_config.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+            errno = EIO;
+            perror("eyeki");
+            config_watch_destroy(config_watch);
+            return 1;
+        }
+
+        if (!timespec_at_or_after(monotonic_now, next_activity_sample)) {
+            continue;
         }
 
         int idle_seconds = 0;
@@ -444,30 +598,31 @@ int main(int argc, char *argv[]) {
         }
 
         /* Idle and unknown samples both discard all accumulated active time. */
-        if (scheduler_record_sample(&scheduler, activity, monotonic_now)) {
-            // Reload config to pick up any changes made via --set-mode or --set-interval
-            cfg = load_config();
-
-            if (cfg.mode == MODE_POPUP)
-                show_popup();
-            else
+        if (scheduler_record_sample(
+                &runtime.scheduler,
+                activity,
+                monotonic_now
+            )) {
+            if (runtime.config.mode == MODE_POPUP) {
+                if (!show_popup(config_watch, &runtime)) {
+                    perror("eyeki");
+                    config_watch_destroy(config_watch);
+                    return 1;
+                }
+            } else {
                 send_notification();
+            }
 
-            if (!interval_minutes_to_seconds(
-                    cfg.interval_minutes,
-                    &interval_seconds
-                ) ||
-                clock_gettime(CLOCK_MONOTONIC, &monotonic_now) < 0 ||
-                !scheduler_init(
-                    &scheduler,
-                    interval_seconds,
-                    monotonic_now
-                )) {
+            if (clock_gettime(CLOCK_MONOTONIC, &monotonic_now) < 0) {
                 fprintf(stderr, "Failed to restart reminder scheduler.\n");
+                config_watch_destroy(config_watch);
                 return 1;
             }
+            scheduler_reset(&runtime.scheduler, monotonic_now);
         }
 
+        next_activity_sample = monotonic_now;
+        next_activity_sample.tv_sec += ACTIVITY_SAMPLE_INTERVAL_SEC;
     }
 
     return 0;

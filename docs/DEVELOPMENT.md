@@ -45,7 +45,7 @@ Do not use `install.sh`. It compiles nonexistent `EyeKi.c`, creates an uppercase
 
 ## Tests, linting, formatting, and type checking
 
-`make test` builds and runs the desktop-independent scheduler and interval/config-persistence unit tests. Configuration coverage includes strict parsing, production boundaries, checked conversion, fresh-home creation, XDG precedence and legacy fallback, owner-only modes, atomic replacement, and failure cleanup/reporting. The scheduler tests inject shorter durations directly rather than weakening production validation. There is no linter configuration, formatter configuration, static-analysis target, broader integration suite, or CI workflow. C has no separate type-check command; compilation is the current type/syntax check. Do not report checks as passing unless they ran in the active environment.
+`make test` builds and runs the desktop-independent scheduler, runtime reload, config-watch, and interval/config-persistence unit tests. Configuration coverage includes strict parsing, production boundaries, checked conversion, fresh-home creation, XDG precedence and legacy fallback, owner-only modes, atomic replacement, event observation, and failure cleanup/reporting. Runtime coverage verifies that interval and mode changes reset elapsed active time and that an invalid replacement cannot partially change state. The scheduler tests inject shorter durations directly rather than weakening production validation. There is no linter configuration, formatter configuration, static-analysis target, broader integration suite, or CI workflow. C has no separate type-check command; compilation is the current type/syntax check. Do not report checks as passing unless they ran in the active environment.
 
 For every C change, run at least:
 
@@ -89,7 +89,9 @@ Run UI checks only in a disposable desktop test account/session when possible.
 3. In notification mode, remain active until one reminder is expected; verify a single notification and record whether the server honors the timeout.
 4. Restart in popup mode (`--set-mode p` before launch); verify button and keyboard activation, window-manager close, focus, scaling, right-to-left text, and multi-monitor behavior.
 5. Test idle/resume and a missing/inaccessible logind service. Current failure behavior is incorrect-prone, so do not leave rapid reminders running unattended.
-6. Stop the process explicitly and inspect only EyeKi-related stderr/journal entries.
+6. While the notification-mode daemon is counting, change the interval and confirm the old progress does not produce a reminder; counting restarts from the successful command. The config-watch/runtime unit tests provide a fast deterministic version of this check.
+7. Restart after a notification-to-popup mode change until runtime backend initialization is fixed.
+8. Stop the process explicitly and inspect only EyeKi-related stderr/journal entries.
 
 The production CLI rejects intervals below ten minutes. Use the seconds-based scheduler test interface to inject shorter durations for automated tests; do not weaken production validation to accelerate a desktop test.
 
@@ -119,8 +121,8 @@ No EyeKi-specific environment variables exist.
 - **`pkg-config` cannot find a module:** install the matching development package and confirm the `.pc` search path.
 - **Undefined `sd_bus_*`:** confirm the Makefile requests and links `libsystemd`, not `dbus-1`.
 - **A setting command reports a filesystem error:** inspect ownership and permissions only for the disposable/active XDG config path; saves do not fall back to HOME when an absolute XDG override is selected.
-- **Changed settings appear stale:** restart; reload happens only after the old timer threshold.
-- **Popup after a live mode change fails:** restart in popup mode so GTK initializes before use.
+- **Changed settings appear stale:** confirm the daemon can watch the selected XDG/HOME path. A filesystem watch failure is reported through stderr/the user journal and terminates the process rather than continuing with stale settings.
+- **Popup after a live notification-to-popup change fails:** restart in popup mode so GTK initializes before use.
 - **Installed service cannot find the binary:** keep `ExecStart` aligned with `BINDIR`/`PREFIX`.
 - **Wayland behavior differs:** GTK can render through Wayland, but stacking/focus/fullscreen policy remains compositor-controlled and unverified.
 

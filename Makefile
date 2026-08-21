@@ -13,11 +13,12 @@ PKG_LIBS := $(shell $(PKG_CONFIG) --libs gtk+-3.0 libnotify libsystemd)
 override CFLAGS += -Wall -Wextra $(PKG_CFLAGS)
 
 TARGET = eyeki
-SOURCES = eyeki.c config.c scheduler.c
-HEADERS = config.h scheduler.h version.h
+SOURCES = eyeki.c config.c config_watch.c runtime.c scheduler.c
+HEADERS = config.h config_watch.h runtime.h scheduler.h version.h
 SERVICE = eyeki.service
 
-TEST_TARGETS = tests/test_scheduler tests/test_config
+TEST_TARGETS = tests/test_scheduler tests/test_config tests/test_config_watch \
+	tests/test_runtime
 
 all: $(TARGET)
 
@@ -38,11 +39,23 @@ clean:
 test: $(TEST_TARGETS)
 	./tests/test_scheduler
 	./tests/test_config
+	./tests/test_config_watch
+	./tests/test_runtime
 
 tests/test_scheduler: tests/test_scheduler.c scheduler.c scheduler.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ tests/test_scheduler.c scheduler.c
 
 tests/test_config: tests/test_config.c config.c config.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ tests/test_config.c config.c
+
+tests/test_config_watch: tests/test_config_watch.c config.c config.h \
+		config_watch.c config_watch.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ tests/test_config_watch.c \
+		config.c config_watch.c
+
+tests/test_runtime: tests/test_runtime.c runtime.c runtime.h config.c config.h \
+		scheduler.c scheduler.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ tests/test_runtime.c runtime.c \
+		config.c scheduler.c
 
 .PHONY: all install uninstall clean test

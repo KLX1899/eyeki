@@ -2,7 +2,7 @@
 
 EyeKi is a small Linux reminder daemon that counts active session time and prompts the user to apply eye drops. It can send a desktop notification or display a fullscreen GTK popup.
 
-> **Status:** early, pre-release prototype. Scheduler and interval/config-persistence unit tests exist, but there are no verifiable tagged releases, CI workflows, or production-ready packages. Session detection, live settings reload, presentation lifecycle, localization, and packaging need work before general distribution. See the [roadmap](docs/ROADMAP.md).
+> **Status:** early, pre-release prototype. Scheduler, runtime-reload, and configuration unit tests exist, but there are no verifiable tagged releases, CI workflows, or production-ready packages. Session detection, presentation lifecycle, localization, and packaging need work before general distribution. See the [roadmap](docs/ROADMAP.md).
 
 EyeKi only provides configurable reminders; the repository contains no clinical validation or medical guidance. Users should choose an interval appropriate to guidance from their healthcare professional.
 
@@ -11,6 +11,7 @@ EyeKi only provides configurable reminders; the repository contains no clinical 
 - Counts time in ten-second polling cycles and discards accumulated active time when the selected logind session reports at least 60 seconds of idle time.
 - Uses either a ten-second libnotify desktop notification or a fullscreen GTK 3 popup that requires a button click.
 - Stores the interval and reminder mode in a local plain-text configuration file.
+- Observes atomic settings replacements with inotify and restarts active-time counting from zero under the complete new configuration.
 - Provides command-line operations to show and change those settings.
 - Includes a systemd user unit and preliminary Debian packaging metadata.
 
@@ -56,7 +57,7 @@ make
 
 `make clean` removes the local `eyeki` build output. The build command is defined by the repository Makefile, but it is not yet exercised by CI.
 
-`make test` builds and runs the desktop-independent scheduler and interval/config-persistence unit tests.
+`make test` builds and runs the desktop-independent scheduler, runtime reload, config-watch, and interval/config-persistence unit tests.
 
 For a system-wide install, inspect `eyeki.service` first, then run with suitable privileges:
 
@@ -93,7 +94,9 @@ Use a whole number from 10 through 300 minutes (five hours). Values outside that
 
 When an XDG override is active but its EyeKi config does not exist, EyeKi reads the legacy `$HOME/.config/eye_reminder/config` file. The next successful setting change writes the complete configuration to the XDG path and leaves the legacy file untouched. Relative `XDG_CONFIG_HOME` values are ignored.
 
-The intended behavior is that every successful settings change takes effect promptly and resets accumulated active time to zero, after which counting restarts under the new complete configuration. The current prototype does not implement that behavior: it reloads only when the old interval reaches its trigger point, and switching from notification to popup while running is unsafe because GTK is initialized only for popup startup. Restart EyeKi after changing either setting until live reload is fixed.
+Every successful settings command atomically replaces the configuration file. The running daemon observes that replacement through inotify, promptly loads the complete new configuration, resets accumulated active time to zero, and starts counting under the new interval and mode. Rapid consecutive replacements may be coalesced into one reload of the latest complete configuration, which has the same reset result.
+
+Runtime switching from notification mode to popup mode remains unsafe because GTK is initialized only when the daemon starts in popup mode. Restart EyeKi after switching into popup mode until presentation-backend initialization is fixed. Interval-only changes are live and do not require a restart.
 
 Persian is the initial product language. The current messages are hard-coded and mention one hour even when a different interval is configured; future localization work must separate text from program logic and handle RTL/accessibility before adding other languages or custom text. There is no snooze action, history, combined presentation mode, graphical settings screen, or automatic updater.
 
@@ -112,9 +115,10 @@ The source contains no network client or telemetry. It stores only the interval 
 
 ## Known limitations
 
-- Scheduler and interval/config-persistence unit tests exist, but there is no broader automated coverage, linting, formatting check, CI, or verified release process.
+- Scheduler, runtime reload, config-watch, and interval/config-persistence unit tests exist, but there is no broader automated coverage, linting, formatting check, CI, or verified release process.
 - Invalid persisted interval values are ignored so they cannot replace the default or a preceding valid value; other malformed configuration fields are not diagnosed.
 - Idle detection can select the wrong login session; lookup errors reset progress until detection recovers.
+- A live notification-to-popup switch can reach GTK without initialization; restart the daemon after selecting popup mode.
 - Closing the popup through the window manager can leave its manual event loop running.
 - Notification errors and configuration-read/parse errors are ignored; concurrent one-shot settings changes can still overwrite one another's fields.
 - Accessibility, right-to-left layout, translations, and Wayland behavior are untested.

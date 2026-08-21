@@ -4,7 +4,7 @@ The first public-release target is Ubuntu. The intended end-user experience is a
 
 ## Readiness assessment
 
-EyeKi is not ready for a public binary release or submission to a distribution repository. The source is pre-release, has no CI or Git tags, and still contains P0 settings-reload, session-selection, popup, notification, and packaging defects. Packaging work exists but was untracked or ignored at the documentation audit.
+EyeKi is not ready for a public binary release or submission to a distribution repository. The source is pre-release, has no CI or Git tags, and still contains P0 session-selection, popup, notification, and packaging defects. Packaging work exists but was untracked or ignored at the documentation audit.
 
 ## Current packaging capability
 
@@ -15,7 +15,7 @@ EyeKi is not ready for a public binary release or submission to a distribution r
 - `eyeki_1.0.orig.tar.gz` is not a valid release source artifact: it has no versioned top-level directory, contains an x86-64 binary, embeds owner/timestamp metadata, and includes a zero-byte entry for itself.
 - Branch names suggest APT/Snap exploration, but no Snap manifest or functional Snap packaging exists. A branch name is not release support.
 
-The Makefile's pkg-config dependency was corrected during the documentation audit from `dbus-1` to `libsystemd`, matching the `sd-bus` API used by source. Compilation still needs verification in a complete toolchain.
+The Makefile's pkg-config dependency was corrected during the documentation audit from `dbus-1` to `libsystemd`, matching the `sd-bus` API used by source. A disposable GCC 15/Make and extracted dependency setup compiled the full application without warnings on 2026-08-20, but a clean supported-baseline build and CI still need verification.
 
 ## Missing or inconsistent release metadata
 

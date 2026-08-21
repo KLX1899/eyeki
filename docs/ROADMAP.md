@@ -8,12 +8,12 @@ This roadmap is evidence-based planning guidance, not a commitment or release sc
 | --- | --- | --- | --- |
 | Reliability — validate interval parsing/range and arithmetic | P0 | 2026-08-19 | Strict 10–300 minute parsing is shared by CLI/config loading; checked seconds conversion and boundary/invalid/test-injection regressions are included. |
 | Settings — create XDG config parents and report/atomically handle writes | P0 | 2026-08-20 | Absolute XDG selection with non-destructive legacy fallback; private parent creation; synced atomic writes; CLI errors; round-trip, permission, migration, and failure regressions. |
+| Reminder scheduling — use monotonic time and immediate, defined reload | P0 | 2026-08-20 | Monotonic runtime state plus inotify observation; each detected atomic settings replacement installs the complete config and resets active time; interval/mode/reset and watcher regressions are included. |
 
 ## Existing incomplete work
 
 | Area and item | Motivation | Priority | Dependencies | Acceptance criteria |
 | --- | --- | --- | --- | --- |
-| Reminder scheduling — use monotonic time and immediate, defined reload | Wall-clock jumps distort time; settings are not observed until the old trigger | P0 | Scheduler extraction and event-driven config observation | Clock changes do not alter elapsed duration; every successful settings change promptly resets active time to zero and restarts under the new complete config; tests cover changes to interval and mode |
 | Reliability — resolve the current user's active logind session | The first `ListSessions` result can belong to another user/session | P0 | Multiple-session policy | Correct UID/session selected in multi-session tests; empty/error states are distinguishable |
 | Notifications — initialize both selectable backends safely and surface failures | Live notification-to-popup changes use GTK before initialization; notification errors are ignored | P0 | Reload policy | Every permitted mode transition is initialized/tested or rejected with clear restart guidance; delivery errors are diagnosable |
 | User experience/accessibility — handle popup close and non-blocking lifecycle | Window-manager close can leave the manual event loop stuck | P0 | Presentation lifecycle design | Button, keyboard, WM close, process signal, and missing-display paths terminate predictably |
