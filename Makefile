@@ -20,7 +20,7 @@ SERVICE = eyeki.service
 TEST_TARGETS = tests/test_scheduler tests/test_config tests/test_config_watch \
 	tests/test_runtime
 
-all: $(TARGET)
+all: $(TARGET)	
 
 $(TARGET): $(SOURCES) $(HEADERS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ $(SOURCES) $(PKG_LIBS)
