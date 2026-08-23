@@ -41,7 +41,7 @@ Keep `main` as the reviewed, integration-ready branch. Do implementation work on
 
 Match nearby C: four-space indentation, same-line opening braces, `snake_case` identifiers, and focused comments explaining constraints rather than restating syntax. Keep `-Wall -Wextra` clean. Avoid mass reformatting because no formatter is configured.
 
-Check every library/system call you add. Validate external/configuration values before arithmetic. Avoid new global state and hard-coded user-facing strings. If adding a second C translation unit, move function definitions out of `config.h` first to prevent duplicate symbols.
+Check every library/system call you add. Validate external/configuration values before arithmetic. Avoid new global state and hard-coded user-facing strings. Keep externally linked function definitions in the matching `src/*.c` module and expose only declarations and types through its header.
 
 ## Tests and verification
 

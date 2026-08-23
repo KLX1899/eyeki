@@ -1,6 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 
-#include "../activity_selection.h"
+#include "activity_selection.h"
 
 #include <assert.h>
 #include <errno.h>

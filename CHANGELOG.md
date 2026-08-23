@@ -16,6 +16,7 @@ All notable changes should be documented here. The format follows Keep a Changel
 
 ### Changed
 
+- Moved application sources and internal headers into `src/`, with build and test paths updated to match.
 - Extracted configuration and monotonic scheduling into separate C modules.
 - Enforced strict 10–300 minute interval input and overflow-safe conversion before scheduling.
 - Changed away/unknown activity handling to discard accumulated active time instead of preserving or advancing it.

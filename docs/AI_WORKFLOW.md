@@ -7,7 +7,7 @@ This guide complements root [AGENTS.md](../AGENTS.md). AGENTS defines repository
 1. `AGENTS.md`
 2. `docs/PROJECT_CONTEXT.md`
 3. `git status` and the current diff
-4. `eyeki.c`, `config.h`, and the task-relevant build/service/package file
+4. `src/eyeki.c`, `src/config.h`, and the task-relevant build/service/package file
 5. Task-specific docs: architecture for flows, development for commands, privacy/security for sensitive changes, and release guidance for packaging
 
 Do not trust summaries, an ignored binary, archive contents, stale installer, branch name, or preliminary package claim over the current source and configured build files.

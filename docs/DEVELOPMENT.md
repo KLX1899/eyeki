@@ -30,6 +30,14 @@ No-argument execution also enters the foreground daemon loop. Stop a development
 
 The Makefile enables `-Wall -Wextra` and honors standard build variables such as `CC`, `CPPFLAGS`, `CFLAGS`, `LDFLAGS`, and `PKG_CONFIG`. It has no debug/release profiles.
 
+## Repository layout
+
+- `src/` contains the application implementation and its internal headers.
+- `tests/` contains desktop-independent unit-test sources; `make test` builds their executables in the same directory and `make clean` removes them.
+- `docs/` contains project, architecture, development, privacy, and release guidance.
+- `debian/` and `eyeki.service` contain the preliminary platform-packaging metadata.
+- The root `Makefile` is the build, test, and installation entry point.
+
 ## Installation and packaging staging
 
 Stage without writing system paths:

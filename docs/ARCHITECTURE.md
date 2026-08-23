@@ -2,11 +2,11 @@
 
 ## Overview
 
-EyeKi is a single-threaded Linux desktop process. CLI, activity lookup, and presentation still live in `eyeki.c`; configuration persistence and scheduling are separate C modules. It has no IPC server, database, network client, plugin system, or background worker.
+EyeKi is a single-threaded Linux desktop process. Application sources and internal headers live under `src/`. CLI, activity lookup, and presentation still live in `src/eyeki.c`; configuration persistence and scheduling are separate C modules. It has no IPC server, database, network client, plugin system, or background worker.
 
 ```mermaid
 flowchart LR
-    CLI[CLI arguments] --> Main[main in eyeki.c]
+    CLI[CLI arguments] --> Main[main in src/eyeki.c]
     File[Local config file] <--> Config[load_config / save_config]
     Config --> Main
     File -->|inotify replacement event| Watch[Config watch]
@@ -27,15 +27,15 @@ flowchart LR
 
 | Location | Responsibility | Important limitations |
 | --- | --- | --- |
-| `main()` in `eyeki.c` | Parse CLI, initialize one UI backend, poll activity and configuration events, dispatch reminders | Infinite foreground loop; backend initialization and reload can disagree |
-| `activity.c` / `activity.h` | Resolve the current user's eligible logind session and query its monotonic idle properties | Recreates a system-bus connection every poll; depends on accurate logind metadata |
-| `activity_selection.c` / `activity_selection.h` | Apply deterministic ownership, graphical-session, and multi-session policy behind an injectable API | Rejects ambiguity when neither a process session nor primary display identifies one candidate |
+| `src/eyeki.c` | Parse CLI, initialize one UI backend, poll activity and configuration events, dispatch reminders | Infinite foreground loop; backend initialization and reload can disagree |
+| `src/activity.c` / `src/activity.h` | Resolve the current user's eligible logind session and query its monotonic idle properties | Recreates a system-bus connection every poll; depends on accurate logind metadata |
+| `src/activity_selection.c` / `src/activity_selection.h` | Apply deterministic ownership, graphical-session, and multi-session policy behind an injectable API | Rejects ambiguity when neither a process session nor primary display identifies one candidate |
 | `send_notification()` | Initialize libnotify lazily and request a ten-second notification | Return values/errors ignored; hard-coded message |
 | `show_popup()` and callback | Build fullscreen window and block in a manual GTK event loop until button click | Window-manager close is not handled; global mutable state; compositor-dependent |
-| `config.c` / `config.h` | Define `Config`, defaults, strict interval parsing/conversion, XDG/legacy selection, and private atomic saving | Mode parsing is permissive; read/parse errors are silent; concurrent complete-config updates can lose fields |
-| `config_watch.c` / `config_watch.h` | Observe the selected primary config path and its nearest existing parent with Linux inotify | Coalesces rapid replacements into the latest complete configuration |
-| `runtime.c` / `runtime.h` | Install a complete configuration with its monotonic scheduler state and reset elapsed time on reload | Presentation-backend readiness remains outside this boundary |
-| `scheduler.c` / `scheduler.h` | Accumulate monotonic active time, reset on idle/unknown state, and report threshold crossing | Receives ten-second activity samples |
+| `src/config.c` / `src/config.h` | Define `Config`, defaults, strict interval parsing/conversion, XDG/legacy selection, and private atomic saving | Mode parsing is permissive; read/parse errors are silent; concurrent complete-config updates can lose fields |
+| `src/config_watch.c` / `src/config_watch.h` | Observe the selected primary config path and its nearest existing parent with Linux inotify | Coalesces rapid replacements into the latest complete configuration |
+| `src/runtime.c` / `src/runtime.h` | Install a complete configuration with its monotonic scheduler state and reset elapsed time on reload | Presentation-backend readiness remains outside this boundary |
+| `src/scheduler.c` / `src/scheduler.h` | Accumulate monotonic active time, reset on idle/unknown state, and report threshold crossing | Receives ten-second activity samples |
 | `Makefile` | Compile with GTK/libnotify/libsystemd; run desktop-independent unit tests; install binary and unit | No debug/lint/package targets |
 | `eyeki.service` | Run `/usr/bin/eyeki --daemon` as a user service and restart failures | Fixed installed path; no hardening or graphical-session binding beyond ordering |
 | `debian/` | Preliminary Debian source-package metadata | Unverified, incomplete, and version/attribution review required |

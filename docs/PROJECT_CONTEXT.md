@@ -100,7 +100,7 @@ See [Architecture](ARCHITECTURE.md), [Repository audit](REPOSITORY_AUDIT.md), an
 ## Start here for a new AI session
 
 1. Read root `AGENTS.md`, this document, and the task-relevant document under `docs/`.
-2. Inspect `git status`, then read `eyeki.c`, `config.h`, `Makefile`, and affected packaging files.
+2. Inspect `git status`, then read `src/eyeki.c`, `src/config.h`, `Makefile`, and affected packaging files.
 3. Verify available dependencies and commands; do not reuse historical pass claims.
 4. State uncertain product/platform assumptions before they influence behavior.
 5. Make a scoped change, validate success and failure paths, update documentation, and review the final diff.

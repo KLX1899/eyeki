@@ -4,11 +4,14 @@ Operational instructions for AI coding agents working in this repository. Read t
 
 ## Repository map
 
-- `eyeki.c` — CLI parsing, timer loop, libnotify reminder, and GTK popup.
-- `activity.c`, `activity.h` — current-user logind resolution and idle lookup.
-- `activity_selection.c`, `activity_selection.h` — testable multi-session selection policy.
-- `config.c`, `config.h` — `Config`, defaults, XDG/legacy path selection, loading, and atomic saving.
-- `scheduler.c`, `scheduler.h` — monotonic active-time state machine, independent of desktop libraries.
+- `src/eyeki.c` — CLI parsing, timer loop, libnotify reminder, and GTK popup.
+- `src/activity.c`, `src/activity.h` — current-user logind resolution and idle lookup.
+- `src/activity_selection.c`, `src/activity_selection.h` — testable multi-session selection policy.
+- `src/config.c`, `src/config.h` — `Config`, defaults, XDG/legacy path selection, loading, and atomic saving.
+- `src/config_watch.c`, `src/config_watch.h` — inotify-based configuration replacement monitoring.
+- `src/runtime.c`, `src/runtime.h` — installed runtime configuration and scheduler state.
+- `src/scheduler.c`, `src/scheduler.h` — monotonic active-time state machine, independent of desktop libraries.
+- `src/version.h` — authoritative upstream development version.
 - `tests/` — desktop-independent scheduler, configuration, reload, watch, and session-selection regression tests.
 - `Makefile` — build plus staged/system installation; output is `eyeki`.
 - `eyeki.service` — systemd user unit expecting `/usr/bin/eyeki`.

@@ -1,7 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 
-#include "../config.h"
-#include "../config_watch.h"
+#include "config.h"
+#include "config_watch.h"
 
 #include <assert.h>
 #include <errno.h>
