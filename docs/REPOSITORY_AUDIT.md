@@ -29,8 +29,8 @@ The ignore file incorrectly hid the systemd unit and Debian source metadata and 
 ## Architecture and maintenance risks
 
 - `config.h` defines non-static functions; adding another translation unit that includes it causes duplicate definitions.
-- `get_idle_seconds()` chooses the first system session rather than the current user's intended session.
-- A D-Bus error returns zero idle time, so failures count toward reminders.
+- Resolved 2026-08-21: idle lookup verifies effective-UID ownership plus active/local/graphical/user-class eligibility and applies deterministic process/primary-display precedence with an ambiguity-safe fallback.
+- Resolved 2026-08-20 and refined 2026-08-21: idle lookup failures reset active time; missing, ambiguous, and integration-error results are distinct and rate-limited.
 - The original realtime/wall-clock scheduler was replaced with a monotonic scheduler, but the change still requires clean-build and runtime evidence.
 - Integer parsing, range, and multiplication are unchecked.
 - Save creates only the final directory, silently fails without `$HOME/.config`, overwrites non-atomically, and reports success anyway.
@@ -45,7 +45,7 @@ Readiness is low. Strings are hard-coded Persian with an embedded one-hour assum
 
 ## Notification permissions and failure states
 
-EyeKi does not check `notify_init()`/`notify_notification_show()` results, expose delivery state, guide users through OS notification policy, or account for notification-server timeout/lock-screen decisions. GTK initialization and styling errors are also inadequately handled. D-Bus failure is silently misclassified as activity. These are release blockers, not merely documentation gaps.
+EyeKi does not check `notify_init()`/`notify_notification_show()` results, expose delivery state, guide users through OS notification policy, or account for notification-server timeout/lock-screen decisions. GTK initialization and styling errors are also inadequately handled. Session/idle lookup failures now reset active time with distinct rate-limited diagnostics. The remaining presentation failures are release blockers, not merely documentation gaps.
 
 ## Commands and environment evidence
 

@@ -2,13 +2,14 @@
 
 EyeKi is a small Linux reminder daemon that counts active session time and prompts the user to apply eye drops. It can send a desktop notification or display a fullscreen GTK popup.
 
-> **Status:** early, pre-release prototype. Scheduler, runtime-reload, and configuration unit tests exist, but there are no verifiable tagged releases, CI workflows, or production-ready packages. Session detection, presentation lifecycle, localization, and packaging need work before general distribution. See the [roadmap](docs/ROADMAP.md).
+> **Status:** early, pre-release prototype. Core scheduling, configuration, reload, and session-selection unit tests exist, but there are no verifiable tagged releases, CI workflows, or production-ready packages. Presentation lifecycle, localization, and packaging need work before general distribution. See the [roadmap](docs/ROADMAP.md).
 
 EyeKi only provides configurable reminders; the repository contains no clinical validation or medical guidance. Users should choose an interval appropriate to guidance from their healthcare professional.
 
 ## Implemented features
 
 - Counts time in ten-second polling cycles and discards accumulated active time when the selected logind session reports at least 60 seconds of idle time.
+- Resolves an active, local graphical logind session owned by the EyeKi process user instead of trusting global session-list order.
 - Uses either a ten-second libnotify desktop notification or a fullscreen GTK 3 popup that requires a button click.
 - Stores the interval and reminder mode in a local plain-text configuration file.
 - Observes atomic settings replacements with inotify and restarts active-time counting from zero under the complete new configuration.
@@ -57,7 +58,7 @@ make
 
 `make clean` removes the local `eyeki` build output. The build command is defined by the repository Makefile, but it is not yet exercised by CI.
 
-`make test` builds and runs the desktop-independent scheduler, runtime reload, config-watch, and interval/config-persistence unit tests.
+`make test` builds and runs the desktop-independent scheduler, runtime reload, config-watch, interval/config-persistence, and logind session-selection unit tests.
 
 For a system-wide install, inspect `eyeki.service` first, then run with suitable privileges:
 
@@ -105,7 +106,7 @@ Persian is the initial product language. The current messages are hard-coded and
 - **A setting command exits with a filesystem error:** check ownership and permissions for the active XDG config path, or `$HOME/.config` when no absolute XDG override is set.
 - **No notification appears:** confirm the desktop notification service is running and inspect stderr or the user journal. Delivery failures are currently not surfaced by EyeKi.
 - **Popup cannot open:** start EyeKi inside the intended graphical session and check the display environment. GTK initialization can terminate when no display is available.
-- **Timer behaves unexpectedly around session changes:** current D-Bus logic inspects the first logind session, not reliably the process owner's active session. D-Bus failures reset the timer because activity cannot be established reliably.
+- **The timer reports no or ambiguous graphical session:** run EyeKi as the intended desktop user. A directly launched process uses its own eligible login session; the user service prefers logind's primary display session and otherwise requires one unambiguous active local graphical session. Lookup failures and unresolved states reset progress.
 - **Service loops or fails:** use `systemctl --user status eyeki.service` and `journalctl --user -u eyeki.service`; the unit restarts failures after five seconds.
 - **Build dependency errors:** verify all three `pkg-config` modules with `pkg-config --modversion gtk+-3.0 libnotify libsystemd`.
 
@@ -115,9 +116,9 @@ The source contains no network client or telemetry. It stores only the interval 
 
 ## Known limitations
 
-- Scheduler, runtime reload, config-watch, and interval/config-persistence unit tests exist, but there is no broader automated coverage, linting, formatting check, CI, or verified release process.
+- Scheduler, runtime reload, config-watch, interval/config-persistence, and session-selection unit tests exist, but there is no broader automated coverage, linting, formatting check, CI, or verified release process.
 - Invalid persisted interval values are ignored so they cannot replace the default or a preceding valid value; other malformed configuration fields are not diagnosed.
-- Idle detection can select the wrong login session; lookup errors reset progress until detection recovers.
+- Current-session resolution and idle queries still depend on systemd-logind metadata and have not been manually verified across the intended Ubuntu desktop/session matrix; missing, ambiguous, or failed lookups reset progress until resolution recovers.
 - A live notification-to-popup switch can reach GTK without initialization; restart the daemon after selecting popup mode.
 - Closing the popup through the window manager can leave its manual event loop running.
 - Notification errors and configuration-read/parse errors are ignored; concurrent one-shot settings changes can still overwrite one another's fields.

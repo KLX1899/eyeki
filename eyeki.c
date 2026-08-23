@@ -7,9 +7,9 @@
 #include <errno.h>
 #include <limits.h>
 #include <poll.h>
-#include <systemd/sd-bus.h>
 #include <libnotify/notify.h>
 #include <gtk/gtk.h>
+#include "activity.h"
 #include "config.h"
 #include "config_watch.h"
 #include "runtime.h"
@@ -84,138 +84,6 @@ static int milliseconds_until(
     milliseconds = (uint64_t)seconds * 1000ULL;
     milliseconds += ((uint64_t)nanoseconds + 999999ULL) / 1000000ULL;
     return milliseconds > INT_MAX ? INT_MAX : (int)milliseconds;
-}
-
-/* get_idle_seconds()
- *
- * Queries systemd-logind over D-Bus to determine how long the current
- * session has been idle.
- *
- * Strategy:
- *   1. Connect to the system bus.
- *   2. Call ListSessions on the logind Manager to get the first session path.
- *   3. Read the boolean property IdleHint on that session.
- *      - If false  → user is active, return 0 immediately.
- *      - If true   → user is idle, continue to step 4.
- *   4. Read IdleSinceHintMonotonic (a microsecond-precision monotonic timestamp
- *      of when the session became idle).
- *   5. Subtract that timestamp from the current time to get elapsed idle
- *      seconds and return it.
- *
- * Returns true and writes the idle duration on success. Returns false when
- * logind cannot provide a trustworthy result, so callers do not confuse an
- * unknown state with user activity.
- */
-bool get_idle_seconds(int *idle_seconds) {
-    sd_bus *bus = NULL;
-    sd_bus_error error = SD_BUS_ERROR_NULL;
-    sd_bus_message *reply = NULL;
-    int ret;
-
-    // Open a connection to the system D-Bus (not the session bus).
-    if (!idle_seconds) return false;
-    *idle_seconds = 0;
-
-    ret = sd_bus_open_system(&bus);
-    if (ret < 0) return false;
-
-    /* Ask logind for the list of all active login sessions.
-     * The reply is an array of (susso) structs:
-     *   s = session id, u = uid, s = username, s = seat, o = object path */
-    ret = sd_bus_call_method(
-        bus,
-        "org.freedesktop.login1",
-        "/org/freedesktop/login1",
-        "org.freedesktop.login1.Manager",
-        "ListSessions",
-        &error, &reply, ""
-    );
-    if (ret < 0) goto cleanup;
-
-    // Enter the array container so we can read individual session entries.
-    ret = sd_bus_message_enter_container(reply, 'a', "(susso)");
-    if (ret < 0) goto cleanup;
-
-    {
-        const char *session_id, *user_name, *seat_id, *session_path;
-        uint32_t uid;
-
-        /* Read only the first session entry.
-         * For a typical single-user desktop this is sufficient.
-         * session_path is the D-Bus object path we need for further queries. */
-        ret = sd_bus_message_read(reply, "(susso)",
-            &session_id, &uid, &user_name, &seat_id, &session_path);
-        if (ret < 0) goto cleanup;
-
-        /* We are done with the ListSessions reply; release it before making
-         * new property calls on the session object. */
-        sd_bus_message_unref(reply);
-        reply = NULL;
-        sd_bus_error_free(&error);
-        error = SD_BUS_ERROR_NULL;
-
-        /* Read the IdleHint boolean property from the session object.
-         * IdleHint is set to true by logind when no input has been received
-         * for the configured IdleAction timeout. */
-        int idle_hint = 0;
-        ret = sd_bus_get_property_trivial(
-            bus,
-            "org.freedesktop.login1",
-            session_path,
-            "org.freedesktop.login1.Session",
-            "IdleHint",
-            &error,
-            'b',          /* D-Bus type: boolean */
-            &idle_hint
-        );
-        if (ret < 0) goto cleanup;
-
-        // User is actively using the session — no idle time to report.
-        if (!idle_hint) {
-            sd_bus_unref(bus);
-            return true;
-        }
-
-        /* Session is idle. Now find out exactly when it became idle so we
-         * can compute the elapsed duration. */
-        uint64_t idle_since = 0;
-        sd_bus_error_free(&error);
-        error = SD_BUS_ERROR_NULL;
-
-        /* IdleSinceHintMonotonic is a uint64 microsecond monotonic timestamp
-         * representing the moment the session transitioned to idle. */
-        ret = sd_bus_get_property_trivial(
-            bus,
-            "org.freedesktop.login1",
-            session_path,
-            "org.freedesktop.login1.Session",
-            "IdleSinceHintMonotonic",
-            &error,
-            't',          /* D-Bus type: uint64 */
-            &idle_since
-        );
-        if (ret < 0 || idle_since == 0) goto cleanup;
-
-        /* Use the same monotonic clock domain as IdleSinceHintMonotonic. */
-        struct timespec ts;
-        if (clock_gettime(CLOCK_MONOTONIC, &ts) < 0) goto cleanup;
-        uint64_t now_usec = (uint64_t)ts.tv_sec * 1000000ULL + ts.tv_nsec / 1000;
-
-        if (idle_since > now_usec) goto cleanup;
-
-        // Convert the difference from microseconds to whole seconds.
-        uint64_t idle_elapsed = (now_usec - idle_since) / 1000000ULL;
-        *idle_seconds = idle_elapsed > INT_MAX ? INT_MAX : (int)idle_elapsed;
-        sd_bus_unref(bus);
-        return true;
-    }
-
-cleanup:
-    // Reached on any D-Bus error; free all resources and report "not idle".
-    if (reply) sd_bus_message_unref(reply);
-    sd_bus_error_free(&error);
-    sd_bus_unref(bus);
-    return false;
 }
 
 /* send_notification()
@@ -516,7 +384,7 @@ int main(int argc, char *argv[]) {
         .events = POLLIN,
         .revents = 0
     };
-    bool activity_error_reported = false;
+    ActivityLookupResult last_activity_lookup = ACTIVITY_LOOKUP_OK;
 
     if (clock_gettime(CLOCK_MONOTONIC, &monotonic_now) < 0 ||
         !runtime_state_init(&runtime, cfg, monotonic_now)) {
@@ -581,21 +449,34 @@ int main(int argc, char *argv[]) {
 
         int idle_seconds = 0;
         ActivityState activity;
-        if (!get_idle_seconds(&idle_seconds)) {
+        ActivityLookupResult activity_lookup =
+            activity_get_idle_seconds(&idle_seconds);
+        if (activity_lookup != ACTIVITY_LOOKUP_OK) {
             activity = ACTIVITY_UNKNOWN;
-            if (!activity_error_reported) {
-                fprintf(stderr, "Unable to determine idle state; timer reset.\n");
-                activity_error_reported = true;
+            if (activity_lookup != last_activity_lookup) {
+                if (activity_lookup == ACTIVITY_LOOKUP_NO_SESSION) {
+                    fprintf(stderr,
+                        "No active local graphical session for this user; "
+                        "timer reset.\n");
+                } else if (activity_lookup == ACTIVITY_LOOKUP_AMBIGUOUS) {
+                    fprintf(stderr,
+                        "Multiple active graphical sessions are ambiguous; "
+                        "timer reset.\n");
+                } else {
+                    fprintf(stderr,
+                        "Unable to query the current session's idle state; "
+                        "timer reset.\n");
+                }
             }
         } else {
             activity = idle_seconds >= IDLE_THRESHOLD_SEC
                 ? ACTIVITY_IDLE
                 : ACTIVITY_ACTIVE;
-            if (activity_error_reported) {
+            if (last_activity_lookup != ACTIVITY_LOOKUP_OK) {
                 fprintf(stderr, "Idle-state lookup recovered.\n");
-                activity_error_reported = false;
             }
         }
+        last_activity_lookup = activity_lookup;
 
         /* Idle and unknown samples both discard all accumulated active time. */
         if (scheduler_record_sample(

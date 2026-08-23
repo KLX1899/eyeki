@@ -13,9 +13,11 @@ flowchart LR
     Watch -->|reload and reset| Main
     Main -->|one-shot command| Exit[Print result and exit]
     Main -->|daemon loop| Timer[10-second polling loop]
-    Timer --> Idle[get_idle_seconds]
-    Idle --> Bus[system D-Bus]
-    Bus --> Logind[systemd-logind]
+    Timer --> Idle[activity_get_idle_seconds]
+    Idle --> Login[sd-login session metadata]
+    Login --> Logind[systemd-logind]
+    Idle --> Bus[system D-Bus idle properties]
+    Bus --> Logind
     Timer -->|threshold reached| Choice{Configured mode}
     Choice --> Notify[libnotify notification]
     Choice --> Popup[GTK fullscreen popup]
@@ -26,7 +28,8 @@ flowchart LR
 | Location | Responsibility | Important limitations |
 | --- | --- | --- |
 | `main()` in `eyeki.c` | Parse CLI, initialize one UI backend, poll activity and configuration events, dispatch reminders | Infinite foreground loop; backend initialization and reload can disagree |
-| `get_idle_seconds()` | Open system bus, list logind sessions, query idle properties | Always uses first session; recreates bus connection every poll; errors become “active” |
+| `activity.c` / `activity.h` | Resolve the current user's eligible logind session and query its monotonic idle properties | Recreates a system-bus connection every poll; depends on accurate logind metadata |
+| `activity_selection.c` / `activity_selection.h` | Apply deterministic ownership, graphical-session, and multi-session policy behind an injectable API | Rejects ambiguity when neither a process session nor primary display identifies one candidate |
 | `send_notification()` | Initialize libnotify lazily and request a ten-second notification | Return values/errors ignored; hard-coded message |
 | `show_popup()` and callback | Build fullscreen window and block in a manual GTK event loop until button click | Window-manager close is not handled; global mutable state; compositor-dependent |
 | `config.c` / `config.h` | Define `Config`, defaults, strict interval parsing/conversion, XDG/legacy selection, and private atomic saving | Mode parsing is permissive; read/parse errors are silent; concurrent complete-config updates can lose fields |
@@ -78,9 +81,9 @@ The extracted scheduler accumulates differences between `CLOCK_MONOTONIC` sample
 
 ## Idle detection
 
-Every poll creates a system-bus connection and calls logind `ListSessions`. The code reads only the first `(session id, uid, username, seat, object path)` record. It then queries that session's `IdleHint`; if true, it reads `IdleSinceHintMonotonic` and subtracts it from the current monotonic clock.
+Every poll resolves a session for EyeKi's effective UID through libsystemd's `sd-login` interface. If the process belongs to a login session, that session is authoritative and must itself be active, local, graphical (`x11`, `wayland`, or `mir`), user-class, and owned by the effective UID. A systemd user service normally has no process session, so EyeKi enumerates only active sessions for its UID, prefers logind's primary display session when eligible, accepts a sole eligible fallback, and rejects multiple eligible sessions as ambiguous rather than depending on enumeration order.
 
-This does not establish that the chosen session belongs to the process owner, seat, or active graphical session. Empty results and D-Bus/property errors produce an unknown activity state, which resets the scheduler and emits one diagnostic per failure/recovery period. A future implementation should resolve the current session explicitly and reuse or subscribe through a persistent connection.
+After selection, EyeKi opens the system bus, resolves only that session's object path, and queries `IdleHint`. When idle, it reads `IdleSinceHintMonotonic` and subtracts it from `CLOCK_MONOTONIC`. Missing eligible sessions, ambiguous candidates, and integration/property errors are distinct lookup results. All reset scheduler progress as unknown activity, and stderr reports only transitions between these states or recovery without logging UIDs or session identifiers.
 
 ## Popup and notification flow
 
@@ -105,7 +108,7 @@ The daemon watches that selected primary path. If its parent directories do not 
 The prevailing strategy is silent fallback:
 
 - Invalid persisted intervals use the default without reporting; configuration path/read failures also use defaults.
-- D-Bus errors return “not idle.”
+- Missing, ambiguous, and failed session/idle lookups return distinct unknown states that reset active time.
 - libnotify initialization/show results and GTK CSS errors are ignored.
 - Invalid CLI input and configuration-save failures have explicit nonzero exits.
 - Startup logs interval and mode to stderr; a systemd service records this in the user journal.
@@ -117,7 +120,7 @@ Future boundaries should return structured status values and make user-actionabl
 | Dependency/integration | Used for |
 | --- | --- |
 | C/POSIX and libc | Process, sleep, time, filesystem, environment |
-| libsystemd `sd-bus` | system D-Bus and logind idle properties |
+| libsystemd `sd-login` / `sd-bus` | Current-user session metadata and system D-Bus idle properties |
 | GTK 3 / GLib / GDK | Fullscreen popup and event processing |
 | libnotify | Desktop notification protocol client |
 | systemd user manager | Optional startup/supervision through `eyeki.service` |
@@ -130,7 +133,7 @@ No direct network or remote service dependency exists in the source.
 
 1. **Configuration:** pure parsing/validation model plus platform path and atomic storage adapters.
 2. **Scheduler/runtime:** monotonic time and explicit events (`active`, `idle`, `unknown`, `settings changed`) independent of D-Bus/GTK.
-3. **Activity provider:** Linux logind implementation that selects the correct session and exposes errors.
+3. **Activity provider:** extracted Linux logind implementation with deterministic session selection; a future persistent connection/monitor can replace per-poll synchronous lookups behind this boundary.
 4. **Presentation:** notification and popup interfaces initialized independently, with accessible lifecycle/error contracts.
 5. **Application/service:** CLI, process signals, live reload policy, logging, and dependency wiring.
 

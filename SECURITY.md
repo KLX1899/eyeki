@@ -44,7 +44,7 @@ EyeKi source contains no network client, account system, telemetry, updater, or 
 
 Current settings are plain text. EyeKi creates missing parents privately, enforces `0700` on its application directory, writes through an exclusive `0600` temporary file, and syncs before and after atomic rename. It rejects symlinked application-directory components, and CLI setting commands exit nonzero on save failure. Existing parent-directory policy, silent read/parse fallback, concurrent lost updates, and retained legacy files remain in security scope.
 
-Idle lookup reads records returned by logind, including session metadata, but the code does not persist or intentionally log those records. D-Bus failures currently become “active” and can produce reminders at inappropriate times. The service logs interval/mode at startup to stderr/user journal.
+Idle lookup restricts candidates to the process effective UID and verifies active, local, graphical, user-class metadata before querying the selected session's idle properties. It does not persist or intentionally log identifiers. Missing, ambiguous, and failed lookups reset active progress and produce rate-limited, identifier-free state diagnostics. The service logs interval/mode at startup to stderr/user journal.
 
 Notification and popup delivery crosses into desktop components. Treat their content as visible to local users and lock-screen policy. Ensure reminders always have an accessible, reliable dismissal path and do not create restart/focus loops.
 

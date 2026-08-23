@@ -19,7 +19,7 @@ With an active XDG override and no XDG config, EyeKi reads the legacy HOME confi
 
 ### Data processed but not intentionally retained
 
-Every ten seconds, EyeKi asks systemd-logind on the local system bus for a session list. The reply includes session ID, numeric user ID, username, seat, and object path. Current code uses only the first session path to query idle state/time; it does not intentionally save or log the other fields.
+Every ten seconds, EyeKi asks local systemd-logind metadata for active sessions belonging to its effective numeric user ID. It evaluates only session identifier, numeric owner ID, active/remote state, type, and class. A process-bound session is authoritative; a user-service process prefers logind's primary display and otherwise requires a single eligible active local graphical user session. Only the selected identifier is resolved over the system bus to query idle state/time. These values are not intentionally saved or logged.
 
 The reminder interval and mode are printed to stderr at daemon startup. Under the supplied systemd user service, that output can be retained in the user journal according to OS policy.
 
@@ -45,7 +45,7 @@ Reminder text is hard-coded in Persian and mentions artificial tears. This can r
 
 ## Current privacy risks
 
-- The first logind session may belong to another local user; even though fields are not retained, querying/acting on the wrong session is a privacy and correctness concern.
+- Incorrect or stale logind metadata can prevent EyeKi from resolving the intended session. Missing, ambiguous, and failed lookups reset reminder progress and emit identifier-free state diagnostics.
 - Existing XDG parent directories and journal retention remain governed by OS/user policy; a legacy HOME config can retain its earlier permissions after non-destructive migration.
 - Notifications may expose reminder content on locked/shared displays.
 - Silent integration failures prevent users from knowing which session/data path is active.
@@ -58,7 +58,7 @@ These are recommendations, not implemented features:
 
 - Keep EyeKi local-only and telemetry-free by default.
 - Collect/persist only settings needed for scheduling; do not add medication/adherence history without explicit product need, consent, retention, export/delete controls, and legal review.
-- Select only the current user's intended session and minimize D-Bus fields processed.
+- Keep current-user session selection and minimized D-Bus processing covered by multi-session regressions.
 - Keep XDG migration and private atomic writes covered by regression tests; do not expose paths or contents in failure diagnostics.
 - Offer privacy-conscious notification wording and document how desktop lock-screen previews can be disabled.
 - Rate-limit and redact logs; never log usernames, session IDs, home paths, environment blocks, or full config files by default.

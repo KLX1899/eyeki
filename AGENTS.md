@@ -4,10 +4,12 @@ Operational instructions for AI coding agents working in this repository. Read t
 
 ## Repository map
 
-- `eyeki.c` — CLI parsing, logind idle query, timer loop, libnotify reminder, and GTK popup.
+- `eyeki.c` — CLI parsing, timer loop, libnotify reminder, and GTK popup.
+- `activity.c`, `activity.h` — current-user logind resolution and idle lookup.
+- `activity_selection.c`, `activity_selection.h` — testable multi-session selection policy.
 - `config.c`, `config.h` — `Config`, defaults, XDG/legacy path selection, loading, and atomic saving.
 - `scheduler.c`, `scheduler.h` — monotonic active-time state machine, independent of desktop libraries.
-- `tests/test_scheduler.c` — desktop-independent scheduler regression tests.
+- `tests/` — desktop-independent scheduler, configuration, reload, watch, and session-selection regression tests.
 - `Makefile` — build plus staged/system installation; output is `eyeki`.
 - `eyeki.service` — systemd user unit expecting `/usr/bin/eyeki`.
 - `install.sh` — stale installer; do not run or use as authoritative guidance.
@@ -20,15 +22,15 @@ There are no nested agent instructions, tests, CI workflows, localization catalo
 
 ## Architecture and data flow
 
-EyeKi is a single-process, single-threaded C program. `main()` loads the XDG configuration path (falling back to the legacy `$HOME/.config/eye_reminder/config` when needed), executes a one-shot CLI command or initializes one presentation backend, then polls every ten seconds. `get_idle_seconds()` queries systemd-logind over system D-Bus. Active elapsed wall time is accumulated until the configured threshold; the process then calls either `send_notification()` or blocking `show_popup()` and resets the counter.
+EyeKi is a single-process, single-threaded C program. `main()` loads the XDG configuration path (falling back to the legacy `$HOME/.config/eye_reminder/config` when needed), executes a one-shot CLI command or initializes one presentation backend, then polls every ten seconds. `activity_get_idle_seconds()` resolves local systemd-logind metadata and queries the selected session over system D-Bus. Active monotonic elapsed time is accumulated until the configured threshold; the process then calls either `send_notification()` or blocking `show_popup()` and resets the counter.
 
 Important invariants and fragility:
 
 - Only one mode is active. Do not document or implement “both” without defining persistence, initialization, and tests.
 - GTK is initialized only when startup mode is popup. Hot-switching from notification to popup currently violates that requirement.
 - Settings reload only after the old threshold fires. Timer changes are not immediate.
-- Idle detection reads the first result from `ListSessions`; it does not identify the current process user's session.
-- D-Bus errors return zero idle seconds, so failures count as activity.
+- Idle detection accepts only an active, local, graphical user session owned by the process effective UID. A process-bound session is authoritative; user services prefer logind's primary display, use a sole eligible fallback, and reject unresolved ambiguity.
+- Missing, ambiguous, or failed session/idle lookups reset accumulated active time and produce transition-only diagnostics without identifiers.
 - The popup owns a manual GTK event loop and exits only when `popup_dismissed` changes.
 - The timer uses `CLOCK_MONOTONIC`; idle or unknown activity state resets accumulated active time.
 
@@ -58,7 +60,7 @@ systemctl --user enable --now eyeki.service
 
 At the 2026-08-14 documentation audit, the existing ignored x86-64 binary successfully ran `--help`, default `--show-config`, valid setting updates when an isolated `$HOME/.config` existed, and invalid-option paths. The host lacked a compiler, Make, development `.pc` files, Debian tools, and documentation linters, so compilation and packaging were not executed. Never convert this historical result into a current pass claim; run commands in the active environment.
 
-`make test` runs scheduler and interval/config-persistence unit tests. There are no configured lint, format, type-check, documentation-check, integration-test, or CI targets. Do not invent a passing check. For C changes, at minimum build with warnings enabled by the Makefile, run available unit tests, and manually exercise affected CLI/desktop behavior.
+`make test` runs scheduler, runtime, config-watch, interval/config-persistence, and activity-session-selection unit tests. There are no configured lint, format, type-check, documentation-check, integration-test, or CI targets. Do not invent a passing check. For C changes, at minimum build with warnings enabled by the Makefile, run available unit tests, and manually exercise affected CLI/desktop behavior.
 
 ## Code conventions
 

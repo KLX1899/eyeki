@@ -45,7 +45,7 @@ Do not use `install.sh`. It compiles nonexistent `EyeKi.c`, creates an uppercase
 
 ## Tests, linting, formatting, and type checking
 
-`make test` builds and runs the desktop-independent scheduler, runtime reload, config-watch, and interval/config-persistence unit tests. Configuration coverage includes strict parsing, production boundaries, checked conversion, fresh-home creation, XDG precedence and legacy fallback, owner-only modes, atomic replacement, event observation, and failure cleanup/reporting. Runtime coverage verifies that interval and mode changes reset elapsed active time and that an invalid replacement cannot partially change state. The scheduler tests inject shorter durations directly rather than weakening production validation. There is no linter configuration, formatter configuration, static-analysis target, broader integration suite, or CI workflow. C has no separate type-check command; compilation is the current type/syntax check. Do not report checks as passing unless they ran in the active environment.
+`make test` builds and runs the desktop-independent scheduler, runtime reload, config-watch, interval/config-persistence, and logind session-selection unit tests. Configuration coverage includes strict parsing, production boundaries, checked conversion, fresh-home creation, XDG precedence and legacy fallback, owner-only modes, atomic replacement, event observation, and failure cleanup/reporting. Runtime coverage verifies that interval and mode changes reset elapsed active time and that an invalid replacement cannot partially change state. Session-selection coverage verifies effective-UID ownership, process and primary-display precedence, local graphical eligibility, unique fallback, ambiguity, and distinct empty/error results. The scheduler tests inject shorter durations directly rather than weakening production validation. There is no linter configuration, formatter configuration, static-analysis target, broader integration suite, or CI workflow. C has no separate type-check command; compilation is the current type/syntax check. Do not report checks as passing unless they ran in the active environment.
 
 For every C change, run at least:
 
@@ -88,7 +88,7 @@ Run UI checks only in a disposable desktop test account/session when possible.
 2. Start `env HOME="$test_home" ./eyeki --daemon` inside the graphical session.
 3. In notification mode, remain active until one reminder is expected; verify a single notification and record whether the server honors the timeout.
 4. Restart in popup mode (`--set-mode p` before launch); verify button and keyboard activation, window-manager close, focus, scaling, right-to-left text, and multi-monitor behavior.
-5. Test idle/resume and a missing/inaccessible logind service. Current failure behavior is incorrect-prone, so do not leave rapid reminders running unattended.
+5. Test idle/resume, direct launch and user-service launch, another user's concurrent session, an SSH/TTY session, multiple active graphical sessions, and a missing/inaccessible logind service. Confirm that only the intended eligible session counts time and that missing, ambiguous, or failed lookup states reset progress without repeated logs.
 6. While the notification-mode daemon is counting, change the interval and confirm the old progress does not produce a reminder; counting restarts from the successful command. The config-watch/runtime unit tests provide a fast deterministic version of this check.
 7. Restart after a notification-to-popup mode change until runtime backend initialization is fixed.
 8. Stop the process explicitly and inspect only EyeKi-related stderr/journal entries.
@@ -100,7 +100,7 @@ The production CLI rejects intervals below ten minutes. Use the seconds-based sc
 - `systemctl --user status eyeki.service` shows unit state and recent output.
 - `journalctl --user -u eyeki.service` shows service stderr, including the startup interval/mode.
 - `ldd ./eyeki` shows resolved runtime libraries for a local ELF build.
-- A D-Bus failure is currently indistinguishable from zero idle time at the call boundary; use a debugger or temporary, privacy-safe error instrumentation for investigation.
+- EyeKi distinguishes no eligible session, ambiguous eligible sessions, and session/idle query failure in stderr without printing identifiers. All three reset the timer; use `loginctl` only with sanitized output when diagnosing eligibility.
 - Popup startup needs a working GTK display. Notification delivery needs the desktop's notification service/session bus even though idle lookup uses the system bus.
 
 ## Build and runtime variables
