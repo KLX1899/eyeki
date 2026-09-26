@@ -13,6 +13,7 @@ EyeKi only provides configurable reminders; the repository contains no clinical 
 - Uses either a ten-second libnotify desktop notification or a fullscreen GTK 3 popup that requires a button click.
 - Stores the interval and reminder mode in a local plain-text configuration file.
 - Observes atomic settings replacements with inotify and restarts active-time counting from zero under the complete new configuration.
+- Initializes a presentation backend before activating its mode, including live mode changes, and reports initialization or notification-delivery failures.
 - Provides command-line operations to show and change those settings.
 - Includes a systemd user unit and preliminary Debian packaging metadata.
 
@@ -95,17 +96,15 @@ Use a whole number from 10 through 300 minutes (five hours). Values outside that
 
 When an XDG override is active but its EyeKi config does not exist, EyeKi reads the legacy `$HOME/.config/eye_reminder/config` file. The next successful setting change writes the complete configuration to the XDG path and leaves the legacy file untouched. Relative `XDG_CONFIG_HOME` values are ignored.
 
-Every successful settings command atomically replaces the configuration file. The running daemon observes that replacement through inotify, promptly loads the complete new configuration, resets accumulated active time to zero, and starts counting under the new interval and mode. Rapid consecutive replacements may be coalesced into one reload of the latest complete configuration, which has the same reset result.
-
-Runtime switching from notification mode to popup mode remains unsafe because GTK is initialized only when the daemon starts in popup mode. Restart EyeKi after switching into popup mode until presentation-backend initialization is fixed. Interval-only changes are live and do not require a restart.
+Every successful settings command atomically replaces the configuration file. The running daemon observes that replacement through inotify, initializes the selected presentation backend if needed, loads the complete new configuration, resets accumulated active time to zero, and starts counting under the new interval and mode. Rapid consecutive replacements may be coalesced into one reload of the latest complete configuration, which has the same reset result. Both live mode-transition directions are supported. If the newly selected backend cannot initialize, EyeKi reports the failure, stops without activating that configuration in the current process, and must be restarted after the desktop-session problem is corrected.
 
 Persian is the initial product language. The current messages are hard-coded and mention one hour even when a different interval is configured; future localization work must separate text from program logic and handle RTL/accessibility before adding other languages or custom text. There is no snooze action, history, combined presentation mode, graphical settings screen, or automatic updater.
 
 ## Troubleshooting
 
 - **A setting command exits with a filesystem error:** check ownership and permissions for the active XDG config path, or `$HOME/.config` when no absolute XDG override is set.
-- **No notification appears:** confirm the desktop notification service is running and inspect stderr or the user journal. Delivery failures are currently not surfaced by EyeKi.
-- **Popup cannot open:** start EyeKi inside the intended graphical session and check the display environment. GTK initialization can terminate when no display is available.
+- **No notification appears:** confirm the desktop notification service is running and inspect stderr or the user journal for EyeKi's initialization or delivery error. A failed delivery restarts the timer and retries only after the next configured interval.
+- **Popup cannot open:** start EyeKi inside the intended graphical session and check the display environment. EyeKi reports a failed GTK display initialization and exits instead of activating popup mode.
 - **The timer reports no or ambiguous graphical session:** run EyeKi as the intended desktop user. A directly launched process uses its own eligible login session; the user service prefers logind's primary display session and otherwise requires one unambiguous active local graphical session. Lookup failures and unresolved states reset progress.
 - **Service loops or fails:** use `systemctl --user status eyeki.service` and `journalctl --user -u eyeki.service`; the unit restarts failures after five seconds.
 - **Build dependency errors:** verify all three `pkg-config` modules with `pkg-config --modversion gtk+-3.0 libnotify libsystemd`.
@@ -116,12 +115,11 @@ The source contains no network client or telemetry. It stores only the interval 
 
 ## Known limitations
 
-- Scheduler, runtime reload, config-watch, interval/config-persistence, and session-selection unit tests exist, but there is no broader automated coverage, linting, formatting check, CI, or verified release process.
+- Scheduler, runtime reload, config-watch, interval/config-persistence, presentation-readiness, and session-selection unit tests exist, but there is no broader automated coverage, linting, formatting check, CI, or verified release process.
 - Invalid persisted interval values are ignored so they cannot replace the default or a preceding valid value; other malformed configuration fields are not diagnosed.
 - Current-session resolution and idle queries still depend on systemd-logind metadata and have not been manually verified across the intended Ubuntu desktop/session matrix; missing, ambiguous, or failed lookups reset progress until resolution recovers.
-- A live notification-to-popup switch can reach GTK without initialization; restart the daemon after selecting popup mode.
 - Closing the popup through the window manager can leave its manual event loop running.
-- Notification errors and configuration-read/parse errors are ignored; concurrent one-shot settings changes can still overwrite one another's fields.
+- Notification initialization/delivery errors are reported, but configuration-read/parse errors are ignored and concurrent one-shot settings changes can still overwrite one another's fields.
 - Accessibility, right-to-left layout, translations, and Wayland behavior are untested.
 - Debian packaging, the source archive, and the systemd integration are preliminary.
 

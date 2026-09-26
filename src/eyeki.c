@@ -12,6 +12,7 @@
 #include "activity.h"
 #include "config.h"
 #include "config_watch.h"
+#include "presentation.h"
 #include "runtime.h"
 #include "scheduler.h"
 #include "version.h"
@@ -27,9 +28,41 @@ static GtkWidget *popup_window = NULL;
 // Flag set to 1 when the user clicks "Done" to break the popup event loop.
 static int popup_dismissed = 0;
 
+typedef struct {
+    int *argc;
+    char ***argv;
+} PopupBackendContext;
+
+static bool initialize_notification_backend(void *context) {
+    (void)context;
+
+    if (notify_is_initted() || notify_init("EyeKi")) {
+        return true;
+    }
+
+    fprintf(stderr,
+        "Failed to initialize the notification backend. "
+        "Check the desktop notification service and restart EyeKi.\n");
+    return false;
+}
+
+static bool initialize_popup_backend(void *context) {
+    PopupBackendContext *popup_context = context;
+
+    if (gtk_init_check(popup_context->argc, popup_context->argv)) {
+        return true;
+    }
+
+    fprintf(stderr,
+        "Failed to initialize the popup backend: no GTK display is "
+        "available. Restart EyeKi inside a graphical desktop session.\n");
+    return false;
+}
+
 static bool reload_config(
     ConfigWatch *config_watch,
     RuntimeState *runtime,
+    PresentationBackends *presentation,
     struct timespec now
 ) {
     bool changed;
@@ -43,6 +76,14 @@ static bool reload_config(
     }
 
     config = load_config();
+    if (!presentation_backends_prepare(presentation, config.mode)) {
+        fprintf(stderr,
+            "Unable to apply the configuration reload because the selected "
+            "presentation backend is unavailable. EyeKi will stop; correct "
+            "the desktop-session problem and restart it.\n");
+        errno = ENODEV;
+        return false;
+    }
     if (!runtime_state_reload(runtime, config, now)) {
         errno = EINVAL;
         return false;
@@ -89,22 +130,39 @@ static int milliseconds_until(
 /* send_notification()
  *
  * Sends a desktop notification via libnotify.
- * notify_init() is called lazily — only on the first invocation.
+ * The notification backend must already be initialized before invocation.
  * The notification auto-dismisses after 10 seconds (10000 ms).
+ * Returns false and reports the libnotify error when delivery fails.
  */
-void send_notification() {
-    if (!notify_is_initted()) {
-        notify_init("EyeKi");
-    }
+static bool send_notification(void) {
+    GError *error = NULL;
     NotifyNotification *n = notify_notification_new(
         "💧 وقت قطره چشم!",
         "یک ساعت از روشن بودن صفحه گذشته.\nالان از Artificial Tears استفاده کن.",
         "dialog-information"
     );
+
+    if (!n) {
+        fprintf(stderr,
+            "Failed to create the reminder notification; the timer will "
+            "restart and retry after the next interval.\n");
+        return false;
+    }
+
     notify_notification_set_urgency(n, NOTIFY_URGENCY_NORMAL);
     notify_notification_set_timeout(n, 10000); /* milliseconds */
-    notify_notification_show(n, NULL);
+    if (!notify_notification_show(n, &error)) {
+        fprintf(stderr,
+            "Failed to deliver the reminder notification%s%s; the timer "
+            "will restart and retry after the next interval.\n",
+            error && error->message ? ": " : "",
+            error && error->message ? error->message : "");
+        g_clear_error(&error);
+        g_object_unref(G_OBJECT(n));
+        return false;
+    }
     g_object_unref(G_OBJECT(n));
+    return true;
 }
 
 /* on_button_clicked()
@@ -143,7 +201,8 @@ static void on_button_clicked(GtkWidget *widget, gpointer data) {
  */
 static bool show_popup(
     ConfigWatch *config_watch,
-    RuntimeState *runtime
+    RuntimeState *runtime,
+    PresentationBackends *presentation
 ) {
     struct pollfd watched_config = {
         .fd = config_watch_fd(config_watch),
@@ -224,7 +283,12 @@ static bool show_popup(
             struct timespec now;
 
             if (clock_gettime(CLOCK_MONOTONIC, &now) < 0 ||
-                !reload_config(config_watch, runtime, now)) {
+                !reload_config(
+                    config_watch,
+                    runtime,
+                    presentation,
+                    now
+                )) {
                 goto failure;
             }
         }
@@ -364,12 +428,20 @@ int main(int argc, char *argv[]) {
     /* Close the load/watch race by loading again after the watch exists. */
     cfg = load_config();
 
-    /* GTK must be initialised before any window is created.
-     * libnotify does not need GTK, so we only init what we actually need. */
-    if (cfg.mode == MODE_POPUP) {
-        gtk_init(&argc, &argv);
-    } else {
-        notify_init("EyeKi");
+    PopupBackendContext popup_context = {&argc, &argv};
+    PresentationBackends presentation;
+
+    if (!presentation_backends_init(
+            &presentation,
+            initialize_notification_backend,
+            NULL,
+            initialize_popup_backend,
+            &popup_context
+        ) || !presentation_backends_prepare(&presentation, cfg.mode)) {
+        fprintf(stderr,
+            "EyeKi cannot start in the selected presentation mode.\n");
+        config_watch_destroy(config_watch);
+        return 1;
     }
 
     fprintf(stderr, "EyeKi started. interval=%dmin mode=%s\n",
@@ -428,6 +500,7 @@ int main(int argc, char *argv[]) {
             if (!reload_config(
                     config_watch,
                     &runtime,
+                    &presentation,
                     monotonic_now
                 )) {
                 perror("eyeki");
@@ -485,13 +558,17 @@ int main(int argc, char *argv[]) {
                 monotonic_now
             )) {
             if (runtime.config.mode == MODE_POPUP) {
-                if (!show_popup(config_watch, &runtime)) {
+                if (!show_popup(
+                        config_watch,
+                        &runtime,
+                        &presentation
+                    )) {
                     perror("eyeki");
                     config_watch_destroy(config_watch);
                     return 1;
                 }
             } else {
-                send_notification();
+                (void)send_notification();
             }
 
             if (clock_gettime(CLOCK_MONOTONIC, &monotonic_now) < 0) {

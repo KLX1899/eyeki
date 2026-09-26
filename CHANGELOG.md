@@ -11,6 +11,7 @@ All notable changes should be documented here. The format follows Keep a Changel
 - Desktop-independent config-watch and runtime-reload regressions for atomic replacements plus interval and mode resets.
 - Desktop-independent interval/config regression tests for production boundaries, malformed values, and checked conversion.
 - Desktop-independent logind session-selection regressions for ownership, process and primary-display preference, ineligible sessions, ambiguity, and empty/error states.
+- Desktop-independent presentation-readiness regressions for both live mode-transition directions and initialization failure/retry behavior.
 - User, contributor, AI-agent, architecture, development, roadmap, privacy, security, release, and repository-audit documentation.
 - GitHub bug, feature, and pull-request templates.
 
@@ -23,6 +24,7 @@ All notable changes should be documented here. The format follows Keep a Changel
 - Adopted the XDG config location with a non-destructive legacy fallback, automatic private parent creation, atomic `0600` writes, and CLI-visible save failures.
 - Changed the daemon to observe atomic settings replacements with inotify and reset monotonic active time before counting under the latest complete configuration.
 - Changed idle lookup to select only the process user's active local graphical logind session, with deterministic process/primary-display precedence and distinct missing, ambiguous, and error results.
+- Changed presentation activation to initialize each backend on first selection, including live mode changes, and made initialization and notification-delivery failures diagnosable.
 - Corrected the Makefile's D-Bus provider from `dbus-1` to `libsystemd`, matching the source's `sd-bus` API.
 - Updated ignore rules so source packaging metadata can be tracked while build binaries and generated source archives remain ignored.
 

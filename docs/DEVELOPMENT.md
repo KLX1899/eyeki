@@ -53,7 +53,7 @@ Do not use `install.sh`. It compiles nonexistent `EyeKi.c`, creates an uppercase
 
 ## Tests, linting, formatting, and type checking
 
-`make test` builds and runs the desktop-independent scheduler, runtime reload, config-watch, interval/config-persistence, and logind session-selection unit tests. Configuration coverage includes strict parsing, production boundaries, checked conversion, fresh-home creation, XDG precedence and legacy fallback, owner-only modes, atomic replacement, event observation, and failure cleanup/reporting. Runtime coverage verifies that interval and mode changes reset elapsed active time and that an invalid replacement cannot partially change state. Session-selection coverage verifies effective-UID ownership, process and primary-display precedence, local graphical eligibility, unique fallback, ambiguity, and distinct empty/error results. The scheduler tests inject shorter durations directly rather than weakening production validation. There is no linter configuration, formatter configuration, static-analysis target, broader integration suite, or CI workflow. C has no separate type-check command; compilation is the current type/syntax check. Do not report checks as passing unless they ran in the active environment.
+`make test` builds and runs the desktop-independent scheduler, runtime reload, config-watch, interval/config-persistence, presentation-readiness, and logind session-selection unit tests. Configuration coverage includes strict parsing, production boundaries, checked conversion, fresh-home creation, XDG precedence and legacy fallback, owner-only modes, atomic replacement, event observation, and failure cleanup/reporting. Runtime coverage verifies that interval and mode changes reset elapsed active time and that an invalid replacement cannot partially change state. Presentation coverage verifies startup preparation, both mode-transition directions, one-time initialization, and retry after initialization failure. Session-selection coverage verifies effective-UID ownership, process and primary-display precedence, local graphical eligibility, unique fallback, ambiguity, and distinct empty/error results. The scheduler tests inject shorter durations directly rather than weakening production validation. There is no linter configuration, formatter configuration, static-analysis target, broader integration suite, or CI workflow. C has no separate type-check command; compilation is the current type/syntax check. Do not report checks as passing unless they ran in the active environment.
 
 For every C change, run at least:
 
@@ -94,11 +94,11 @@ Run UI checks only in a disposable desktop test account/session when possible.
 
 1. Build and run the isolated configuration steps above with the minimum production interval of ten minutes.
 2. Start `env HOME="$test_home" ./eyeki --daemon` inside the graphical session.
-3. In notification mode, remain active until one reminder is expected; verify a single notification and record whether the server honors the timeout.
-4. Restart in popup mode (`--set-mode p` before launch); verify button and keyboard activation, window-manager close, focus, scaling, right-to-left text, and multi-monitor behavior.
+3. In notification mode, remain active until one reminder is expected; verify a single notification and record whether the server honors the timeout. Stop the notification service for a separate run and confirm EyeKi reports delivery failure without retrying before the next configured interval.
+4. While the daemon remains running, switch from notification to popup mode and verify the popup backend initializes before the new mode starts counting. Verify button and keyboard activation, window-manager close, focus, scaling, right-to-left text, and multi-monitor behavior. Switch back to notification mode and confirm one notification is emitted at the next threshold.
 5. Test idle/resume, direct launch and user-service launch, another user's concurrent session, an SSH/TTY session, multiple active graphical sessions, and a missing/inaccessible logind service. Confirm that only the intended eligible session counts time and that missing, ambiguous, or failed lookup states reset progress without repeated logs.
 6. While the notification-mode daemon is counting, change the interval and confirm the old progress does not produce a reminder; counting restarts from the successful command. The config-watch/runtime unit tests provide a fast deterministic version of this check.
-7. Restart after a notification-to-popup mode change until runtime backend initialization is fixed.
+7. Start directly in popup mode with the GTK display unavailable and confirm startup fails with a backend-specific diagnostic. Restore the display, restart, and confirm initialization succeeds. Test notification-service loss at delivery time as described in step 3; `notify_init()` can succeed before a server is contacted.
 8. Stop the process explicitly and inspect only EyeKi-related stderr/journal entries.
 
 The production CLI rejects intervals below ten minutes. Use the seconds-based scheduler test interface to inject shorter durations for automated tests; do not weaken production validation to accelerate a desktop test.
@@ -130,7 +130,7 @@ No EyeKi-specific environment variables exist.
 - **Undefined `sd_bus_*`:** confirm the Makefile requests and links `libsystemd`, not `dbus-1`.
 - **A setting command reports a filesystem error:** inspect ownership and permissions only for the disposable/active XDG config path; saves do not fall back to HOME when an absolute XDG override is selected.
 - **Changed settings appear stale:** confirm the daemon can watch the selected XDG/HOME path. A filesystem watch failure is reported through stderr/the user journal and terminates the process rather than continuing with stale settings.
-- **Popup after a live notification-to-popup change fails:** restart in popup mode so GTK initializes before use.
+- **A live mode change stops the daemon:** inspect the immediately preceding backend-specific stderr/journal message. Restore the graphical display or notification service, then restart EyeKi; an unavailable backend is never activated.
 - **Installed service cannot find the binary:** keep `ExecStart` aligned with `BINDIR`/`PREFIX`.
 - **Wayland behavior differs:** GTK can render through Wayland, but stacking/focus/fullscreen policy remains compositor-controlled and unverified.
 

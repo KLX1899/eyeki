@@ -2,7 +2,7 @@
 
 ## Overview
 
-EyeKi is a single-threaded Linux desktop process. Application sources and internal headers live under `src/`. CLI, activity lookup, and presentation still live in `src/eyeki.c`; configuration persistence and scheduling are separate C modules. It has no IPC server, database, network client, plugin system, or background worker.
+EyeKi is a single-threaded Linux desktop process. Application sources and internal headers live under `src/`. CLI, activity lookup, and concrete GTK/libnotify presentation still live in `src/eyeki.c`; presentation readiness, configuration persistence, and scheduling are separate C modules. It has no IPC server, database, network client, plugin system, or background worker.
 
 ```mermaid
 flowchart LR
@@ -27,14 +27,15 @@ flowchart LR
 
 | Location | Responsibility | Important limitations |
 | --- | --- | --- |
-| `src/eyeki.c` | Parse CLI, initialize one UI backend, poll activity and configuration events, dispatch reminders | Infinite foreground loop; backend initialization and reload can disagree |
+| `src/eyeki.c` | Parse CLI, initialize concrete UI backends, poll activity and configuration events, dispatch reminders | Infinite foreground loop; concrete presentation still depends directly on GTK/libnotify |
 | `src/activity.c` / `src/activity.h` | Resolve the current user's eligible logind session and query its monotonic idle properties | Recreates a system-bus connection every poll; depends on accurate logind metadata |
 | `src/activity_selection.c` / `src/activity_selection.h` | Apply deterministic ownership, graphical-session, and multi-session policy behind an injectable API | Rejects ambiguity when neither a process session nor primary display identifies one candidate |
-| `send_notification()` | Initialize libnotify lazily and request a ten-second notification | Return values/errors ignored; hard-coded message |
+| `src/presentation.c` / `src/presentation.h` | Track lazy notification/popup readiness and initialize a selected backend once before activation | Concrete initialization and delivery remain in `src/eyeki.c` |
+| `send_notification()` | Request a ten-second libnotify notification and report delivery failure | Hard-coded message; notification-server timeout policy remains external |
 | `show_popup()` and callback | Build fullscreen window and block in a manual GTK event loop until button click | Window-manager close is not handled; global mutable state; compositor-dependent |
 | `src/config.c` / `src/config.h` | Define `Config`, defaults, strict interval parsing/conversion, XDG/legacy selection, and private atomic saving | Mode parsing is permissive; read/parse errors are silent; concurrent complete-config updates can lose fields |
 | `src/config_watch.c` / `src/config_watch.h` | Observe the selected primary config path and its nearest existing parent with Linux inotify | Coalesces rapid replacements into the latest complete configuration |
-| `src/runtime.c` / `src/runtime.h` | Install a complete configuration with its monotonic scheduler state and reset elapsed time on reload | Presentation-backend readiness remains outside this boundary |
+| `src/runtime.c` / `src/runtime.h` | Install a complete configuration with its monotonic scheduler state and reset elapsed time on reload | Caller must prepare the selected presentation backend before installation |
 | `src/scheduler.c` / `src/scheduler.h` | Accumulate monotonic active time, reset on idle/unknown state, and report threshold crossing | Receives ten-second activity samples |
 | `Makefile` | Compile with GTK/libnotify/libsystemd; run desktop-independent unit tests; install binary and unit | No debug/lint/package targets |
 | `eyeki.service` | Run `/usr/bin/eyeki --daemon` as a user service and restart failures | Fixed installed path; no hardening or graphical-session binding beyond ordering |
@@ -50,7 +51,7 @@ flowchart LR
    - `--daemon` is a no-op marker; no arguments behave identically.
    - Unknown or incomplete options print an error/usage and exit nonzero.
 3. Daemon startup creates an inotify watch for the primary configuration path, reloads once to close the load/watch race, and installs the complete configuration in runtime state.
-4. Popup startup calls `gtk_init`; notification startup calls `notify_init` without checking success.
+4. Startup prepares the selected backend with checked `gtk_init_check` or `notify_init`; failure is diagnosed and exits nonzero.
 5. The process logs its interval/mode to stderr and enters the reminder loop.
 6. The loop ends only through external process termination or a fatal library failure.
 
@@ -87,11 +88,11 @@ After selection, EyeKi opens the system bus, resolves only that session's object
 
 ## Popup and notification flow
 
-Notification mode creates `NotifyNotification`, sets normal urgency and a requested 10,000 ms timeout, shows it, and unreferences it. Notification servers may ignore the timeout. EyeKi neither requests permission nor reports rejection/failure.
+Notification mode creates `NotifyNotification`, sets normal urgency and a requested 10,000 ms timeout, shows it, and unreferences it. Notification servers may ignore the timeout. EyeKi reports initialization and show failures to stderr/the user journal; after a show failure, the scheduler restarts and waits for the next configured interval rather than retrying rapidly.
 
 Popup mode creates an undecorated fullscreen, keep-above `GtkWindow`, places Persian labels and a button over a dark background, then pumps GTK events every 50 ms. Only the button callback changes `popup_dismissed`; a window-manager close can leave the loop alive. Focus, stacking, fullscreen, and multi-monitor behavior are not verified and can vary by compositor.
 
-Runtime mode changes are fragile: if the process started in notification mode and reloads popup mode, the next reminder calls GTK functions without prior `gtk_init`. Until fixed, restart the process after switching into popup mode.
+Before a startup or reload configuration becomes active, the presentation-readiness state initializes its selected backend if it has not already succeeded. Both mode-transition directions are supported, and switching back to an already prepared backend does not reinitialize it. A failed reload initialization is diagnosed and stops the daemon without installing the unusable configuration in that process; after the desktop-session problem is fixed, a restart loads the persisted mode and tries again.
 
 ## Configuration and persistence flow
 
@@ -105,11 +106,11 @@ The daemon watches that selected primary path. If its parent directories do not 
 
 ## Error handling and logging
 
-The prevailing strategy is silent fallback:
+Error handling is mixed:
 
 - Invalid persisted intervals use the default without reporting; configuration path/read failures also use defaults.
 - Missing, ambiguous, and failed session/idle lookups return distinct unknown states that reset active time.
-- libnotify initialization/show results and GTK CSS errors are ignored.
+- libnotify initialization/show failures and missing GTK displays are reported; GTK CSS errors remain ignored.
 - Invalid CLI input and configuration-save failures have explicit nonzero exits.
 - Startup logs interval and mode to stderr; a systemd service records this in the user journal.
 
@@ -134,7 +135,7 @@ No direct network or remote service dependency exists in the source.
 1. **Configuration:** pure parsing/validation model plus platform path and atomic storage adapters.
 2. **Scheduler/runtime:** monotonic time and explicit events (`active`, `idle`, `unknown`, `settings changed`) independent of D-Bus/GTK.
 3. **Activity provider:** extracted Linux logind implementation with deterministic session selection; a future persistent connection/monitor can replace per-poll synchronous lookups behind this boundary.
-4. **Presentation:** notification and popup interfaces initialized independently, with accessible lifecycle/error contracts.
+4. **Presentation:** move the concrete notification and popup implementations behind the existing independently initialized readiness state, with accessible lifecycle/error contracts.
 5. **Application/service:** CLI, process signals, live reload policy, logging, and dependency wiring.
 
 These boundaries enable unit testing without a desktop or system bus and keep future platform ports from leaking into core scheduling.

@@ -9,6 +9,7 @@ Operational instructions for AI coding agents working in this repository. Read t
 - `src/activity_selection.c`, `src/activity_selection.h` — testable multi-session selection policy.
 - `src/config.c`, `src/config.h` — `Config`, defaults, XDG/legacy path selection, loading, and atomic saving.
 - `src/config_watch.c`, `src/config_watch.h` — inotify-based configuration replacement monitoring.
+- `src/presentation.c`, `src/presentation.h` — testable lazy readiness state for the notification and popup backends.
 - `src/runtime.c`, `src/runtime.h` — installed runtime configuration and scheduler state.
 - `src/scheduler.c`, `src/scheduler.h` — monotonic active-time state machine, independent of desktop libraries.
 - `src/version.h` — authoritative upstream development version.

@@ -34,8 +34,8 @@ The ignore file incorrectly hid the systemd unit and Debian source metadata and 
 - The original realtime/wall-clock scheduler was replaced with a monotonic scheduler, but the change still requires clean-build and runtime evidence.
 - Integer parsing, range, and multiplication are unchecked.
 - Save creates only the final directory, silently fails without `$HOME/.config`, overwrites non-atomically, and reports success anyway.
-- Live interval updates wait for the old threshold; live notification-to-popup updates can call uninitialized GTK.
-- Popup WM-close is not wired to its loop exit; notification and GTK failures are mostly ignored.
+- Resolved 2026-09-26: live mode changes initialize the selected backend before activation, and notification initialization/delivery failures are reported.
+- Popup WM-close is not wired to its loop exit; GTK styling failures are still ignored.
 - Every poll reconnects to system D-Bus; global popup state/manual event pumping limits maintainability.
 - The systemd unit fixed path must stay aligned with packaging and can restart-loop failures.
 
@@ -45,7 +45,7 @@ Readiness is low. Strings are hard-coded Persian with an embedded one-hour assum
 
 ## Notification permissions and failure states
 
-EyeKi does not check `notify_init()`/`notify_notification_show()` results, expose delivery state, guide users through OS notification policy, or account for notification-server timeout/lock-screen decisions. GTK initialization and styling errors are also inadequately handled. Session/idle lookup failures now reset active time with distinct rate-limited diagnostics. The remaining presentation failures are release blockers, not merely documentation gaps.
+EyeKi now checks `notify_init()`, `notify_notification_show()`, and `gtk_init_check()`, reports backend-specific initialization/delivery failures, and initializes newly selected modes before activation. It still does not expose delivery state outside stderr/the journal, guide users through OS notification policy, or account for notification-server timeout/lock-screen decisions. GTK styling errors and the popup close lifecycle remain inadequately handled. Session/idle lookup failures reset active time with distinct rate-limited diagnostics. The remaining presentation failures are release blockers, not merely documentation gaps.
 
 ## Commands and environment evidence
 
