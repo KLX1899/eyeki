@@ -2,7 +2,7 @@
 
 ## Overview
 
-EyeKi is a single-threaded Linux desktop process. Application sources and internal headers live under `src/`. CLI, activity lookup, and concrete GTK/libnotify presentation still live in `src/eyeki.c`; presentation readiness, configuration persistence, and scheduling are separate C modules. It has no IPC server, database, network client, plugin system, or background worker.
+EyeKi is a single-threaded Linux desktop process. Application sources and internal headers live under `src/`. CLI, activity lookup, and concrete GTK/libnotify presentation still live in `src/eyeki.c`; lifecycle state, presentation readiness, configuration persistence, and scheduling are separate C modules. It has no IPC server, database, network client, plugin system, or background worker.
 
 ```mermaid
 flowchart LR
@@ -30,9 +30,10 @@ flowchart LR
 | `src/eyeki.c` | Parse CLI, initialize concrete UI backends, poll activity and configuration events, dispatch reminders | Infinite foreground loop; concrete presentation still depends directly on GTK/libnotify |
 | `src/activity.c` / `src/activity.h` | Resolve the current user's eligible logind session and query its monotonic idle properties | Recreates a system-bus connection every poll; depends on accurate logind metadata |
 | `src/activity_selection.c` / `src/activity_selection.h` | Apply deterministic ownership, graphical-session, and multi-session policy behind an injectable API | Rejects ambiguity when neither a process session nor primary display identifies one candidate |
+| `src/lifecycle.c` / `src/lifecycle.h` | Track popup open/close events and convert SIGINT/SIGTERM into shutdown requests | Signal state is process-global; concrete GTK cleanup remains in `src/eyeki.c` |
 | `src/presentation.c` / `src/presentation.h` | Track lazy notification/popup readiness and initialize a selected backend once before activation | Concrete initialization and delivery remain in `src/eyeki.c` |
 | `send_notification()` | Request a ten-second libnotify notification and report delivery failure | Hard-coded message; notification-server timeout policy remains external |
-| `show_popup()` and callback | Build fullscreen window and block in a manual GTK event loop until button click | Window-manager close is not handled; global mutable state; compositor-dependent |
+| `show_popup()` and callbacks | Build one fullscreen window and return while the daemon loop services GTK events | Fullscreen/focus/stacking remain compositor-dependent; no multi-monitor implementation |
 | `src/config.c` / `src/config.h` | Define `Config`, defaults, strict interval parsing/conversion, XDG/legacy selection, and private atomic saving | Mode parsing is permissive; read/parse errors are silent; concurrent complete-config updates can lose fields |
 | `src/config_watch.c` / `src/config_watch.h` | Observe the selected primary config path and its nearest existing parent with Linux inotify | Coalesces rapid replacements into the latest complete configuration |
 | `src/runtime.c` / `src/runtime.h` | Install a complete configuration with its monotonic scheduler state and reset elapsed time on reload | Caller must prepare the selected presentation backend before installation |
@@ -53,7 +54,7 @@ flowchart LR
 3. Daemon startup creates an inotify watch for the primary configuration path, reloads once to close the load/watch race, and installs the complete configuration in runtime state.
 4. Startup prepares the selected backend with checked `gtk_init_check` or `notify_init`; failure is diagnosed and exits nonzero.
 5. The process logs its interval/mode to stderr and enters the reminder loop.
-6. The loop ends only through external process termination or a fatal library failure.
+6. SIGINT/SIGTERM interrupt polling, request cleanup of any active popup, and return success; fatal library/integration failures return nonzero.
 
 ## Reminder and timer lifecycle
 
@@ -74,7 +75,7 @@ stateDiagram-v2
     CheckThreshold --> Notify: notification mode
     CheckThreshold --> Popup: popup mode
     Notify --> ResetCount
-    Popup --> ResetCount: Done button clicked
+    Popup --> ResetCount: Button/keyboard or WM close
     ResetCount --> Wait
 ```
 
@@ -90,7 +91,7 @@ After selection, EyeKi opens the system bus, resolves only that session's object
 
 Notification mode creates `NotifyNotification`, sets normal urgency and a requested 10,000 ms timeout, shows it, and unreferences it. Notification servers may ignore the timeout. EyeKi reports initialization and show failures to stderr/the user journal; after a show failure, the scheduler restarts and waits for the next configured interval rather than retrying rapidly.
 
-Popup mode creates an undecorated fullscreen, keep-above `GtkWindow`, places Persian labels and a button over a dark background, then pumps GTK events every 50 ms. Only the button callback changes `popup_dismissed`; a window-manager close can leave the loop alive. Focus, stacking, fullscreen, and multi-monitor behavior are not verified and can vary by compositor.
+Popup mode creates one undecorated fullscreen, keep-above `GtkWindow`, places Persian labels and a button over a dark background, focuses that button, and returns immediately. While the popup is open, the daemon caps its poll wait at 50 milliseconds, drains pending GTK events, and pauses active-time accumulation. Pointer clicks plus Enter/Space use the acknowledgement callback; a window-manager destroy event closes the lifecycle independently. A live change to notification mode and clean SIGINT/SIGTERM shutdown also destroy the popup. Focus, stacking, fullscreen, and multi-monitor behavior are not verified and can vary by compositor.
 
 Before a startup or reload configuration becomes active, the presentation-readiness state initializes its selected backend if it has not already succeeded. Both mode-transition directions are supported, and switching back to an already prepared backend does not reinitialize it. A failed reload initialization is diagnosed and stops the daemon without installing the unusable configuration in that process; after the desktop-session problem is fixed, a restart loads the persisted mode and tries again.
 
@@ -100,7 +101,7 @@ The default is `interval_minutes = 60`, `MODE_POPUP`. Interval values must conta
 
 An absolute, non-empty `XDG_CONFIG_HOME` selects `$XDG_CONFIG_HOME/eye_reminder/config`; otherwise the path is `$HOME/.config/eye_reminder/config`. Relative XDG overrides are ignored. When the XDG file is absent, `load_config()` reads the legacy HOME path without modifying it. A later successful setting change writes only the XDG path, providing a non-destructive migration.
 
-The daemon watches that selected primary path. If its parent directories do not exist yet, it watches the nearest existing ancestor and moves the watch inward after creation events. Atomic rename gives each successful settings command a distinct file identity, including commands that save values identical to the current configuration. Deleting or replacing the file is also observed. The popup's manual GTK loop checks the same inotify descriptor every 50 milliseconds, so an open acknowledgement window does not defer a configuration reload.
+The daemon watches that selected primary path. If its parent directories do not exist yet, it watches the nearest existing ancestor and moves the watch inward after creation events. Atomic rename gives each successful settings command a distinct file identity, including commands that save values identical to the current configuration. Deleting or replacing the file is also observed. The main loop continues polling the same inotify descriptor while a popup is open, so an acknowledgement window does not defer a configuration reload.
 
 `save_config()` safely walks and creates missing parent directories without following symlinked directory components. Newly created parents and the EyeKi directory use owner-only access; an existing EyeKi directory is tightened to `0700`. It writes the full configuration to an exclusive `0600` temporary file, flushes and syncs it, atomically renames it to `config`, and syncs the directory. Concurrent one-shot processes can still load the same old configuration and replace one another's field updates; service-aware coordination remains separate work.
 

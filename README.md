@@ -2,7 +2,7 @@
 
 EyeKi is a small Linux reminder daemon that counts active session time and prompts the user to apply eye drops. It can send a desktop notification or display a fullscreen GTK popup.
 
-> **Status:** early, pre-release prototype. Core scheduling, configuration, reload, and session-selection unit tests exist, but there are no verifiable tagged releases, CI workflows, or production-ready packages. Presentation lifecycle, localization, and packaging need work before general distribution. See the [roadmap](docs/ROADMAP.md).
+> **Status:** early, pre-release prototype. Core scheduling, configuration, reload, presentation-lifecycle, and session-selection unit tests exist, but there are no verifiable tagged releases, CI workflows, or production-ready packages. Localization and packaging need work before general distribution. See the [roadmap](docs/ROADMAP.md).
 
 EyeKi only provides configurable reminders; the repository contains no clinical validation or medical guidance. Users should choose an interval appropriate to guidance from their healthcare professional.
 
@@ -10,7 +10,7 @@ EyeKi only provides configurable reminders; the repository contains no clinical 
 
 - Counts time in ten-second polling cycles and discards accumulated active time when the selected logind session reports at least 60 seconds of idle time.
 - Resolves an active, local graphical logind session owned by the EyeKi process user instead of trusting global session-list order.
-- Uses either a ten-second libnotify desktop notification or a fullscreen GTK 3 popup that requires a button click.
+- Uses either a ten-second libnotify desktop notification or a fullscreen GTK 3 popup with a focused keyboard-operable acknowledgement button.
 - Stores the interval and reminder mode in a local plain-text configuration file.
 - Observes atomic settings replacements with inotify and restarts active-time counting from zero under the complete new configuration.
 - Initializes a presentation backend before activating its mode, including live mode changes, and reports initialization or notification-delivery failures.
@@ -59,7 +59,7 @@ make
 
 `make clean` removes the local `eyeki` build output. The build command is defined by the repository Makefile, but it is not yet exercised by CI.
 
-`make test` builds and runs the desktop-independent scheduler, runtime reload, config-watch, interval/config-persistence, and logind session-selection unit tests.
+`make test` builds and runs the desktop-independent scheduler, runtime reload, config-watch, interval/config-persistence, presentation-readiness, popup/process-lifecycle, and logind session-selection unit tests.
 
 For a system-wide install, inspect `eyeki.service` first, then run with suitable privileges:
 
@@ -115,10 +115,9 @@ The source contains no network client or telemetry. It stores only the interval 
 
 ## Known limitations
 
-- Scheduler, runtime reload, config-watch, interval/config-persistence, presentation-readiness, and session-selection unit tests exist, but there is no broader automated coverage, linting, formatting check, CI, or verified release process.
+- Scheduler, runtime reload, config-watch, interval/config-persistence, presentation-readiness, popup/process-lifecycle, and session-selection unit tests exist, but there is no broader automated coverage, linting, formatting check, CI, or verified release process.
 - Invalid persisted interval values are ignored so they cannot replace the default or a preceding valid value; other malformed configuration fields are not diagnosed.
 - Current-session resolution and idle queries still depend on systemd-logind metadata and have not been manually verified across the intended Ubuntu desktop/session matrix; missing, ambiguous, or failed lookups reset progress until resolution recovers.
-- Closing the popup through the window manager can leave its manual event loop running.
 - Notification initialization/delivery errors are reported, but configuration-read/parse errors are ignored and concurrent one-shot settings changes can still overwrite one another's fields.
 - Accessibility, right-to-left layout, translations, and Wayland behavior are untested.
 - Debian packaging, the source archive, and the systemd integration are preliminary.

@@ -35,17 +35,17 @@ The ignore file incorrectly hid the systemd unit and Debian source metadata and 
 - Integer parsing, range, and multiplication are unchecked.
 - Save creates only the final directory, silently fails without `$HOME/.config`, overwrites non-atomically, and reports success anyway.
 - Resolved 2026-09-26: live mode changes initialize the selected backend before activation, and notification initialization/delivery failures are reported.
-- Popup WM-close is not wired to its loop exit; GTK styling failures are still ignored.
-- Every poll reconnects to system D-Bus; global popup state/manual event pumping limits maintainability.
+- Resolved 2026-09-26: the popup no longer owns a nested event loop; acknowledgement, window-manager destruction, mode change, and SIGINT/SIGTERM have explicit close paths.
+- Every activity sample reconnects to system D-Bus; concrete GTK event pumping in the application loop still limits maintainability.
 - The systemd unit fixed path must stay aligned with packaging and can restart-loop failures.
 
 ## Accessibility and localization readiness
 
-Readiness is low. Strings are hard-coded Persian with an embedded one-hour assumption; there is no translation catalog, locale selection, pluralization, or translator workflow. The UI uses a GTK button and high-contrast CSS, but keyboard, assistive technology, RTL layout, focus, scale, WM close, timeout, multi-monitor, and compositor behavior have no test evidence. A fullscreen acknowledgement can reduce user control and needs explicit accessibility/product review.
+Readiness is low. Strings are hard-coded Persian with an embedded one-hour assumption; there is no translation catalog, locale selection, pluralization, or translator workflow. The UI uses a focused/default GTK button and high-contrast CSS, and lifecycle state covers acknowledgement and WM close, but assistive technology, RTL layout, focus behavior, scale, multi-monitor, and compositor behavior have no desktop test evidence. A fullscreen acknowledgement can reduce user control and needs explicit accessibility/product review.
 
 ## Notification permissions and failure states
 
-EyeKi now checks `notify_init()`, `notify_notification_show()`, and `gtk_init_check()`, reports backend-specific initialization/delivery failures, and initializes newly selected modes before activation. It still does not expose delivery state outside stderr/the journal, guide users through OS notification policy, or account for notification-server timeout/lock-screen decisions. GTK styling errors and the popup close lifecycle remain inadequately handled. Session/idle lookup failures reset active time with distinct rate-limited diagnostics. The remaining presentation failures are release blockers, not merely documentation gaps.
+EyeKi now checks `notify_init()`, `notify_notification_show()`, and `gtk_init_check()`, reports backend-specific initialization/delivery failures, initializes newly selected modes before activation, and handles popup close events without a nested loop. It still does not expose delivery state outside stderr/the journal, guide users through OS notification policy, account for notification-server timeout/lock-screen decisions, or report GTK styling errors. Session/idle lookup failures reset active time with distinct rate-limited diagnostics. The remaining presentation limitations require desktop evidence before release.
 
 ## Commands and environment evidence
 

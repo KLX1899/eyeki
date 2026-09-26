@@ -9,6 +9,7 @@ Operational instructions for AI coding agents working in this repository. Read t
 - `src/activity_selection.c`, `src/activity_selection.h` — testable multi-session selection policy.
 - `src/config.c`, `src/config.h` — `Config`, defaults, XDG/legacy path selection, loading, and atomic saving.
 - `src/config_watch.c`, `src/config_watch.h` — inotify-based configuration replacement monitoring.
+- `src/lifecycle.c`, `src/lifecycle.h` — testable popup state and SIGINT/SIGTERM shutdown requests.
 - `src/presentation.c`, `src/presentation.h` — testable lazy readiness state for the notification and popup backends.
 - `src/runtime.c`, `src/runtime.h` — installed runtime configuration and scheduler state.
 - `src/scheduler.c`, `src/scheduler.h` — monotonic active-time state machine, independent of desktop libraries.
@@ -35,7 +36,7 @@ Important invariants and fragility:
 - Settings reload only after the old threshold fires. Timer changes are not immediate.
 - Idle detection accepts only an active, local, graphical user session owned by the process effective UID. A process-bound session is authoritative; user services prefer logind's primary display, use a sole eligible fallback, and reject unresolved ambiguity.
 - Missing, ambiguous, or failed session/idle lookups reset accumulated active time and produce transition-only diagnostics without identifiers.
-- The popup owns a manual GTK event loop and exits only when `popup_dismissed` changes.
+- Popup GTK events are serviced from the daemon loop at most every 50 milliseconds while the window is open; acknowledgement, window-manager close, mode change, or shutdown destroys the one active window.
 - The timer uses `CLOCK_MONOTONIC`; idle or unknown activity state resets accumulated active time.
 
 See `docs/ARCHITECTURE.md` for diagrams and detailed flows.
@@ -64,7 +65,7 @@ systemctl --user enable --now eyeki.service
 
 At the 2026-08-14 documentation audit, the existing ignored x86-64 binary successfully ran `--help`, default `--show-config`, valid setting updates when an isolated `$HOME/.config` existed, and invalid-option paths. The host lacked a compiler, Make, development `.pc` files, Debian tools, and documentation linters, so compilation and packaging were not executed. Never convert this historical result into a current pass claim; run commands in the active environment.
 
-`make test` runs scheduler, runtime, config-watch, interval/config-persistence, and activity-session-selection unit tests. There are no configured lint, format, type-check, documentation-check, integration-test, or CI targets. Do not invent a passing check. For C changes, at minimum build with warnings enabled by the Makefile, run available unit tests, and manually exercise affected CLI/desktop behavior.
+`make test` runs scheduler, runtime, config-watch, interval/config-persistence, presentation-readiness, popup/process-lifecycle, and activity-session-selection unit tests. There are no configured lint, format, type-check, documentation-check, integration-test, or CI targets. Do not invent a passing check. For C changes, at minimum build with warnings enabled by the Makefile, run available unit tests, and manually exercise affected CLI/desktop behavior.
 
 ## Code conventions
 

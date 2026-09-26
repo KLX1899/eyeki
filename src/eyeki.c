@@ -12,6 +12,7 @@
 #include "activity.h"
 #include "config.h"
 #include "config_watch.h"
+#include "lifecycle.h"
 #include "presentation.h"
 #include "runtime.h"
 #include "scheduler.h"
@@ -21,17 +22,17 @@
    active time and require a fresh continuous-use interval. */
 #define IDLE_THRESHOLD_SEC 60
 #define ACTIVITY_SAMPLE_INTERVAL_SEC 10
-
-// Global reference to the popup window so the button callback can destroy it.
-static GtkWidget *popup_window = NULL;
-
-// Flag set to 1 when the user clicks "Done" to break the popup event loop.
-static int popup_dismissed = 0;
+#define POPUP_EVENT_INTERVAL_MILLISECONDS 50
 
 typedef struct {
     int *argc;
     char ***argv;
 } PopupBackendContext;
+
+typedef struct {
+    GtkWidget *window;
+    PopupLifecycle lifecycle;
+} Popup;
 
 static bool initialize_notification_backend(void *context) {
     (void)context;
@@ -165,25 +166,51 @@ static bool send_notification(void) {
     return true;
 }
 
-/* on_button_clicked()
- *
- * GTK signal callback connected to the "Done" button inside the popup.
- * Sets the global flag and destroys the window so show_popup()'s event
- * loop can exit cleanly.
- */
+static void dismiss_popup(Popup *popup, PopupCloseReason reason) {
+    if (!popup ||
+        !popup_lifecycle_dismiss(&popup->lifecycle, reason)) {
+        return;
+    }
+
+    if (popup->window) {
+        gtk_widget_destroy(popup->window);
+    }
+}
+
 static void on_button_clicked(GtkWidget *widget, gpointer data) {
-    (void)widget; (void)data; /* suppress unused-parameter warnings */
-    popup_dismissed = 1;
-    if (popup_window) {
-        gtk_widget_destroy(popup_window);
-        popup_window = NULL;
+    (void)widget;
+    dismiss_popup(data, POPUP_CLOSE_ACKNOWLEDGED);
+}
+
+static void on_popup_destroy(GtkWidget *widget, gpointer data) {
+    Popup *popup = data;
+
+    if (popup->window == widget) {
+        popup->window = NULL;
+    }
+    if (popup_lifecycle_is_open(&popup->lifecycle)) {
+        (void)popup_lifecycle_dismiss(
+            &popup->lifecycle,
+            POPUP_CLOSE_WINDOW_MANAGER
+        );
+    }
+}
+
+static void process_popup_events(const Popup *popup) {
+    if (!popup_lifecycle_is_open(&popup->lifecycle)) {
+        return;
+    }
+
+    while (gtk_events_pending()) {
+        gtk_main_iteration_do(FALSE);
     }
 }
 
 /* show_popup()
  *
- * Builds and displays a fullscreen GTK overlay window that blocks the
- * user's view until they confirm they have used their eye drops.
+ * Builds and displays a fullscreen GTK overlay window. The daemon's main
+ * loop continues servicing GTK, configuration, and process-lifecycle events
+ * until the popup is dismissed.
  *
  * Layout:
  *   GtkWindow (fullscreen, always-on-top, undecorated)
@@ -194,63 +221,80 @@ static void on_button_clicked(GtkWidget *widget, gpointer data) {
  *           ├── GtkLabel  (body text)
  *           └── GtkButton ("Done")
  *
- * The function runs a manual GTK event loop (instead of gtk_main()) so
- * that control returns to the daemon loop as soon as the popup is dismissed.
- * It also services config-watch events so settings reload while the window
- * remains open. Returns false if event processing fails.
+ * The acknowledgement button is the default focused widget, so keyboard
+ * Enter/Space activation follows normal GTK button behavior. Window-manager
+ * closure is observed through the window's destroy signal.
  */
-static bool show_popup(
-    ConfigWatch *config_watch,
-    RuntimeState *runtime,
-    PresentationBackends *presentation
-) {
-    struct pollfd watched_config = {
-        .fd = config_watch_fd(config_watch),
-        .events = POLLIN,
-        .revents = 0
-    };
+static bool show_popup(Popup *popup) {
+    GtkWidget *background;
+    GtkWidget *box;
+    GtkWidget *button;
+    GtkWidget *label;
+    GtkWidget *label2;
+    GtkWidget *overlay;
+    GtkCssProvider *provider;
 
-    popup_dismissed = 0;
+    if (popup_lifecycle_is_open(&popup->lifecycle)) {
+        return true;
+    }
+    if (!popup_lifecycle_open(&popup->lifecycle)) {
+        return false;
+    }
 
     // Create an undecorated, always-on-top fullscreen window.
-    popup_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_title(GTK_WINDOW(popup_window), "Eye Reminder");
-    gtk_window_fullscreen(GTK_WINDOW(popup_window));
-    gtk_window_set_decorated(GTK_WINDOW(popup_window), FALSE);
-    gtk_window_set_keep_above(GTK_WINDOW(popup_window), TRUE);
+    popup->window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    if (!popup->window) {
+        (void)popup_lifecycle_dismiss(
+            &popup->lifecycle,
+            POPUP_CLOSE_SHUTDOWN
+        );
+        return false;
+    }
+    gtk_window_set_title(GTK_WINDOW(popup->window), "Eye Reminder");
+    gtk_window_fullscreen(GTK_WINDOW(popup->window));
+    gtk_window_set_decorated(GTK_WINDOW(popup->window), FALSE);
+    gtk_window_set_keep_above(GTK_WINDOW(popup->window), TRUE);
+    g_signal_connect(
+        popup->window,
+        "destroy",
+        G_CALLBACK(on_popup_destroy),
+        popup
+    );
 
     // Overlay allows stacking widgets: background behind, content on top.
-    GtkWidget *overlay = gtk_overlay_new();
-    gtk_container_add(GTK_CONTAINER(popup_window), overlay);
+    overlay = gtk_overlay_new();
+    gtk_container_add(GTK_CONTAINER(popup->window), overlay);
 
     /* Drawing area acts as the dark semi-transparent backdrop.
      * It expands to fill the entire screen via hexpand/vexpand. */
-    GtkWidget *background = gtk_drawing_area_new();
+    background = gtk_drawing_area_new();
     gtk_widget_set_hexpand(background, TRUE);
     gtk_widget_set_vexpand(background, TRUE);
     gtk_container_add(GTK_CONTAINER(overlay), background);
 
     // Vertical box centered on screen holds all visible content.
-    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 20);
+    box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 20);
     gtk_widget_set_halign(box, GTK_ALIGN_CENTER);
     gtk_widget_set_valign(box, GTK_ALIGN_CENTER);
     gtk_overlay_add_overlay(GTK_OVERLAY(overlay), box);
 
-    GtkWidget *label  = gtk_label_new("💧 وقت قطره چشم!");
-    GtkWidget *label2 = gtk_label_new(
+    label = gtk_label_new("💧 وقت قطره چشم!");
+    label2 = gtk_label_new(
         "یک ساعت از استفاده از صفحه گذشته.\nالان از Artificial Tears استفاده کن."
     );
-    GtkWidget *button = gtk_button_new_with_label("انجام شد ✅");
+    button = gtk_button_new_with_label("انجام شد ✅");
 
     // Connect the button click to our dismiss callback.
-    g_signal_connect(button, "clicked", G_CALLBACK(on_button_clicked), NULL);
+    g_signal_connect(button, "clicked", G_CALLBACK(on_button_clicked), popup);
+    gtk_widget_set_can_default(button, TRUE);
+    gtk_window_set_default(GTK_WINDOW(popup->window), button);
 
     gtk_box_pack_start(GTK_BOX(box), label,  FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(box), label2, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(box), button, FALSE, FALSE, 0);
 
     // Apply CSS styling: dark window background, large white text, big button.
-    GtkCssProvider *provider = gtk_css_provider_new();
+    provider = gtk_css_provider_new();
     gtk_css_provider_load_from_data(provider,
         "window { background-color: rgba(0,0,0,0.85); }\n"
         "label  { font-size: 36px; color: white; }\n"
@@ -264,49 +308,16 @@ static bool show_popup(
     );
     g_object_unref(provider);
 
-    gtk_widget_show_all(popup_window);
-
-    /* Manual event loop: process GTK events until the user clicks "Done".
-     * usleep(50000) = 50 ms between iterations to avoid busy-waiting. */
-    while (!popup_dismissed) {
-        int poll_result;
-
-        while (gtk_events_pending())
-            gtk_main_iteration();
-
-        watched_config.revents = 0;
-        poll_result = poll(&watched_config, 1, 0);
-        if (poll_result < 0 && errno != EINTR) {
-            goto failure;
-        }
-        if (watched_config.revents & POLLIN) {
-            struct timespec now;
-
-            if (clock_gettime(CLOCK_MONOTONIC, &now) < 0 ||
-                !reload_config(
-                    config_watch,
-                    runtime,
-                    presentation,
-                    now
-                )) {
-                goto failure;
-            }
-        }
-        if (watched_config.revents & (POLLERR | POLLHUP | POLLNVAL)) {
-            errno = EIO;
-            goto failure;
-        }
-        usleep(50000);
-    }
+    gtk_widget_show_all(popup->window);
+    gtk_widget_grab_focus(button);
     return true;
+}
 
-failure:
-    popup_dismissed = 1;
-    if (popup_window) {
-        gtk_widget_destroy(popup_window);
-        popup_window = NULL;
+static void shutdown_presentation(Popup *popup) {
+    dismiss_popup(popup, POPUP_CLOSE_SHUTDOWN);
+    if (notify_is_initted()) {
+        notify_uninit();
     }
-    return false;
 }
 
 /* print_usage()
@@ -419,6 +430,11 @@ int main(int argc, char *argv[]) {
 
     /* --- Daemon initialisation --- */
 
+    if (!lifecycle_install_signal_handlers()) {
+        perror("eyeki");
+        return 1;
+    }
+
     ConfigWatch *config_watch = config_watch_create();
     if (!config_watch) {
         perror("eyeki");
@@ -430,6 +446,9 @@ int main(int argc, char *argv[]) {
 
     PopupBackendContext popup_context = {&argc, &argv};
     PresentationBackends presentation;
+    Popup popup = { .window = NULL };
+
+    popup_lifecycle_init(&popup.lifecycle);
 
     if (!presentation_backends_init(
             &presentation,
@@ -461,6 +480,7 @@ int main(int argc, char *argv[]) {
     if (clock_gettime(CLOCK_MONOTONIC, &monotonic_now) < 0 ||
         !runtime_state_init(&runtime, cfg, monotonic_now)) {
         fprintf(stderr, "Failed to initialize reminder scheduler.\n");
+        shutdown_presentation(&popup);
         config_watch_destroy(config_watch);
         return 1;
     }
@@ -468,30 +488,63 @@ int main(int argc, char *argv[]) {
     next_activity_sample.tv_sec += ACTIVITY_SAMPLE_INTERVAL_SEC;
 
     // --- Main daemon loop ---
-    while (1) {
+    while (!lifecycle_shutdown_requested()) {
+        PopupCloseReason close_reason;
+        int poll_timeout;
+
+        process_popup_events(&popup);
+        if (lifecycle_shutdown_requested()) {
+            break;
+        }
+
         if (clock_gettime(CLOCK_MONOTONIC, &monotonic_now) < 0) {
             fprintf(stderr, "Failed to read monotonic clock.\n");
+            shutdown_presentation(&popup);
             config_watch_destroy(config_watch);
             return 1;
         }
 
+        if (popup_lifecycle_take_close(
+                &popup.lifecycle,
+                &close_reason
+            )) {
+            (void)close_reason;
+            scheduler_reset(&runtime.scheduler, monotonic_now);
+            next_activity_sample = monotonic_now;
+            next_activity_sample.tv_sec += ACTIVITY_SAMPLE_INTERVAL_SEC;
+        }
+
         watched_config.revents = 0;
+        poll_timeout = milliseconds_until(
+            next_activity_sample,
+            monotonic_now
+        );
+        if (popup_lifecycle_is_open(&popup.lifecycle) &&
+            poll_timeout > POPUP_EVENT_INTERVAL_MILLISECONDS) {
+            poll_timeout = POPUP_EVENT_INTERVAL_MILLISECONDS;
+        }
         int poll_result = poll(
             &watched_config,
             1,
-            milliseconds_until(next_activity_sample, monotonic_now)
+            poll_timeout
         );
         if (poll_result < 0) {
             if (errno == EINTR) {
                 continue;
             }
             perror("eyeki");
+            shutdown_presentation(&popup);
             config_watch_destroy(config_watch);
             return 1;
         }
 
+        if (lifecycle_shutdown_requested()) {
+            break;
+        }
+
         if (clock_gettime(CLOCK_MONOTONIC, &monotonic_now) < 0) {
             fprintf(stderr, "Failed to read monotonic clock.\n");
+            shutdown_presentation(&popup);
             config_watch_destroy(config_watch);
             return 1;
         }
@@ -504,19 +557,32 @@ int main(int argc, char *argv[]) {
                     monotonic_now
                 )) {
                 perror("eyeki");
+                shutdown_presentation(&popup);
                 config_watch_destroy(config_watch);
                 return 1;
+            }
+            if (runtime.config.mode != MODE_POPUP) {
+                dismiss_popup(&popup, POPUP_CLOSE_MODE_CHANGE);
             }
         }
 
         if (watched_config.revents & (POLLERR | POLLHUP | POLLNVAL)) {
             errno = EIO;
             perror("eyeki");
+            shutdown_presentation(&popup);
             config_watch_destroy(config_watch);
             return 1;
         }
 
         if (!timespec_at_or_after(monotonic_now, next_activity_sample)) {
+            continue;
+        }
+
+        /* A visible popup pauses active-time counting until dismissal. */
+        if (popup_lifecycle_is_open(&popup.lifecycle)) {
+            scheduler_reset(&runtime.scheduler, monotonic_now);
+            next_activity_sample = monotonic_now;
+            next_activity_sample.tv_sec += ACTIVITY_SAMPLE_INTERVAL_SEC;
             continue;
         }
 
@@ -558,12 +624,9 @@ int main(int argc, char *argv[]) {
                 monotonic_now
             )) {
             if (runtime.config.mode == MODE_POPUP) {
-                if (!show_popup(
-                        config_watch,
-                        &runtime,
-                        &presentation
-                    )) {
-                    perror("eyeki");
+                if (!show_popup(&popup)) {
+                    fprintf(stderr, "Failed to create reminder popup.\n");
+                    shutdown_presentation(&popup);
                     config_watch_destroy(config_watch);
                     return 1;
                 }
@@ -573,6 +636,7 @@ int main(int argc, char *argv[]) {
 
             if (clock_gettime(CLOCK_MONOTONIC, &monotonic_now) < 0) {
                 fprintf(stderr, "Failed to restart reminder scheduler.\n");
+                shutdown_presentation(&popup);
                 config_watch_destroy(config_watch);
                 return 1;
             }
@@ -583,5 +647,7 @@ int main(int argc, char *argv[]) {
         next_activity_sample.tv_sec += ACTIVITY_SAMPLE_INTERVAL_SEC;
     }
 
+    shutdown_presentation(&popup);
+    config_watch_destroy(config_watch);
     return 0;
 }

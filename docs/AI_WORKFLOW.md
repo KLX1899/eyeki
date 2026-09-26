@@ -39,7 +39,7 @@ make
 ./eyeki --show-config
 ```
 
-There is a scheduler unit-test target, but no automated lint/format/doc target or CI. If a task adds one, update AGENTS, Development, Contributing, and CI in the same change. If a command cannot run, capture the exact blocker; do not substitute an older binary as a build pass.
+There are desktop-independent unit-test targets, but no automated lint/format/doc target or CI. If a task adds one, update AGENTS, Development, Contributing, and CI in the same change. If a command cannot run, capture the exact blocker; do not substitute an older binary as a build pass.
 
 ## Keep documentation synchronized
 

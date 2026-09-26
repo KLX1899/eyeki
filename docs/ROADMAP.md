@@ -11,12 +11,12 @@ This roadmap is evidence-based planning guidance, not a commitment or release sc
 | Reminder scheduling — use monotonic time and immediate, defined reload | P0 | 2026-08-20 | Monotonic runtime state plus inotify observation; each detected atomic settings replacement installs the complete config and resets active time; interval/mode/reset and watcher regressions are included. |
 | Reliability — resolve the current user's active logind session | P0 | 2026-08-21 | Effective-UID ownership and active/local/graphical/user-class eligibility; process-session then primary-display precedence; unique fallback; multi-session, ambiguity, empty, and error regressions. |
 | Notifications — initialize both selectable backends safely and surface failures | P0 | 2026-09-26 | Each selected backend is checked before startup/reload activation; both live transition directions and initialization failures have desktop-independent regressions; notification delivery failures are reported and retry only after the normal interval. |
+| User experience/accessibility — handle popup close and non-blocking lifecycle | P0 | 2026-09-26 | Popup GTK work is serviced by the daemon loop; acknowledgement, WM close, mode-change, SIGINT/SIGTERM, and missing-display paths have defined outcomes, with desktop-independent lifecycle regressions. |
 
 ## Existing incomplete work
 
 | Area and item | Motivation | Priority | Dependencies | Acceptance criteria |
 | --- | --- | --- | --- | --- |
-| User experience/accessibility — handle popup close and non-blocking lifecycle | Window-manager close can leave the manual event loop stuck | P0 | Presentation lifecycle design | Button, keyboard, WM close, process signal, and missing-display paths terminate predictably |
 | Packaging — reconcile/track Makefile, user unit, Debian files, and installer | Packaging files were untracked/ignored; installer is stale; source archive is malformed | P0 | Version and supported-platform decisions | Authoritative tracked files build/package from clean checkout; stale installer removed or replaced in a reviewed change |
 | Localization — replace hard-coded interval-specific Persian copy | Messages always say one hour and cannot be translated | P1 | Locale/fallback decision | Message reflects configured interval; strings are extractable; Persian RTL and fallback locale tested |
 

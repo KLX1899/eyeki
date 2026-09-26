@@ -45,7 +45,7 @@ Check every library/system call you add. Validate external/configuration values 
 
 ## Tests and verification
 
-Scheduler unit tests exist, but broader config/activity/presentation coverage and CI do not. Run all available relevant checks and report exact results:
+Desktop-independent scheduler, configuration, activity-selection, presentation, and lifecycle unit tests exist, but broader desktop integration coverage and CI do not. Run all available relevant checks and report exact results:
 
 ```sh
 make clean

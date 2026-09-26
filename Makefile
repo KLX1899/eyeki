@@ -18,16 +18,17 @@ PROJECT_CPPFLAGS = -I$(SRC_DIR)
 
 TARGET = eyeki
 SOURCE_NAMES = eyeki.c activity.c activity_selection.c config.c config_watch.c \
-	presentation.c runtime.c scheduler.c
+	lifecycle.c presentation.c runtime.c scheduler.c
 HEADER_NAMES = activity.h activity_selection.h config.h config_watch.h \
-	presentation.h runtime.h scheduler.h version.h
+	lifecycle.h presentation.h runtime.h scheduler.h version.h
 SOURCES = $(addprefix $(SRC_DIR)/,$(SOURCE_NAMES))
 HEADERS = $(addprefix $(SRC_DIR)/,$(HEADER_NAMES))
 SERVICE = eyeki.service
 
 TEST_TARGETS = $(TEST_DIR)/test_scheduler $(TEST_DIR)/test_config \
 	$(TEST_DIR)/test_config_watch $(TEST_DIR)/test_runtime \
-	$(TEST_DIR)/test_activity_selection $(TEST_DIR)/test_presentation
+	$(TEST_DIR)/test_activity_selection $(TEST_DIR)/test_presentation \
+	$(TEST_DIR)/test_lifecycle
 
 all: $(TARGET)
 
@@ -53,6 +54,7 @@ test: $(TEST_TARGETS)
 	./$(TEST_DIR)/test_runtime
 	./$(TEST_DIR)/test_activity_selection
 	./$(TEST_DIR)/test_presentation
+	./$(TEST_DIR)/test_lifecycle
 
 $(TEST_DIR)/test_scheduler: $(TEST_DIR)/test_scheduler.c \
 		$(SRC_DIR)/scheduler.c $(SRC_DIR)/scheduler.h
@@ -89,5 +91,10 @@ $(TEST_DIR)/test_presentation: $(TEST_DIR)/test_presentation.c \
 		$(SRC_DIR)/config.h
 	$(CC) $(CPPFLAGS) $(PROJECT_CPPFLAGS) $(CFLAGS) -o $@ \
 		$(TEST_DIR)/test_presentation.c $(SRC_DIR)/presentation.c
+
+$(TEST_DIR)/test_lifecycle: $(TEST_DIR)/test_lifecycle.c \
+		$(SRC_DIR)/lifecycle.c $(SRC_DIR)/lifecycle.h
+	$(CC) $(CPPFLAGS) $(PROJECT_CPPFLAGS) $(CFLAGS) -o $@ \
+		$(TEST_DIR)/test_lifecycle.c $(SRC_DIR)/lifecycle.c
 
 .PHONY: all install uninstall clean test
