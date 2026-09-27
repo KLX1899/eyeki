@@ -9,7 +9,7 @@ All notable changes should be documented here. The format follows Keep a Changel
 - An authoritative source version and `--version` CLI command.
 - Desktop-independent scheduler regression tests for threshold, idle, unknown-state, and clock-discontinuity behavior.
 - Desktop-independent config-watch and runtime-reload regressions for atomic replacements plus interval and mode resets.
-- Desktop-independent interval/config regression tests for production boundaries, malformed values, and checked conversion.
+- Desktop-independent interval/config regression tests for defaults, malformed persisted data, production boundaries, malformed values, and checked conversion.
 - Desktop-independent logind session-selection regressions for ownership, process and primary-display preference, ineligible sessions, ambiguity, and empty/error states.
 - Desktop-independent presentation-readiness regressions for both live mode-transition directions and initialization failure/retry behavior.
 - Desktop-independent lifecycle regressions for popup dismissal reasons and SIGINT/SIGTERM shutdown requests.

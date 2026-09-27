@@ -13,6 +13,7 @@ This roadmap is evidence-based planning guidance, not a commitment or release sc
 | Notifications — initialize both selectable backends safely and surface failures | P0 | 2026-09-26 | Each selected backend is checked before startup/reload activation; both live transition directions and initialization failures have desktop-independent regressions; notification delivery failures are reported and retry only after the normal interval. |
 | User experience/accessibility — handle popup close and non-blocking lifecycle | P0 | 2026-09-26 | Popup GTK work is serviced by the daemon loop; acknowledgement, WM close, mode-change, SIGINT/SIGTERM, and missing-display paths have defined outcomes, with desktop-independent lifecycle regressions. |
 | Packaging — reconcile/track Makefile, user unit, Debian files, and installer | P0 | 2026-09-26 | Authoritative lowercase build, staged-install, service, and Debian sources are tracked and aligned on version, paths, dependencies, license, and platform claims; a clean tracked-tree export built `0.1.0-1` and ran all tests; fresh package installs leave the user unit disabled; the stale installer was removed and generated artifacts remain ignored. |
+| Testing — isolate config parser and scheduler with unit tests | P0 | 2026-09-27 | Desktop-independent config, scheduler, and runtime tests cover defaults, malformed persisted data, production ranges, threshold crossing, idle reset/resume, unknown-state reset, configuration reload, and backward-clock handling. |
 
 ## Existing incomplete work
 
@@ -24,7 +25,6 @@ This roadmap is evidence-based planning guidance, not a commitment or release sc
 
 | Area and item | Motivation | Priority | Dependencies | Acceptance criteria |
 | --- | --- | --- | --- | --- |
-| Testing — isolate config parser and scheduler with unit tests | No automated regression evidence exists | P0 | Minimal module boundaries | Tests cover defaults, malformed files, ranges, thresholds, idle/resume, reload, and clock/error cases |
 | CI/CD — build/test on a supported Linux baseline | Clean-checkout build is not continuously verified | P0 | Tests and declared baseline | CI installs declared dependencies, builds with warnings as errors in CI, runs tests/link checks, and rejects generated artifacts |
 | Security/privacy — define private reporting channel and file permissions | Security contact is missing; config permissions depend on umask | P1 | Maintainer contact decision | `SECURITY.md` placeholder resolved; config/journal threat model tested; no unexpected data collection |
 | Notifications — define unknown/permission/failure states | D-Bus and notification failures currently look like success/activity | P1 | Confirmed reset-on-idle-lookup-failure policy | Idle lookup failure resets active time; recovery restarts from zero; user receives rate-limited actionable diagnostics; no failure causes reminder storms |

@@ -54,6 +54,14 @@ static void assert_file_contents(const char *path, const char *expected) {
     assert(strcmp(contents, expected) == 0);
 }
 
+static void write_file_contents(const char *path, const char *contents) {
+    FILE *file = fopen(path, "w");
+
+    assert(file);
+    assert(fputs(contents, file) >= 0);
+    assert(fclose(file) == 0);
+}
+
 static void assert_config(Config cfg, int interval_minutes, ReminderMode mode) {
     assert(cfg.interval_minutes == interval_minutes);
     assert(cfg.mode == mode);
@@ -94,6 +102,57 @@ static void assert_invalid_interval(const char *value) {
 
     assert(!parse_interval_minutes(value, &minutes));
     assert(minutes == 123);
+}
+
+static void test_default_config_and_missing_file(void) {
+    char *home = make_temp_directory();
+
+    assert_config(default_config(), 60, MODE_POPUP);
+    assert(setenv("HOME", home, 1) == 0);
+    assert(unsetenv("XDG_CONFIG_HOME") == 0);
+    assert_config(load_config(), 60, MODE_POPUP);
+
+    assert(rmdir(home) == 0);
+    free(home);
+}
+
+static void test_malformed_file_preserves_defaults_and_valid_values(void) {
+    char *home = make_temp_directory();
+    char config_home[PATH_MAX];
+    char config_directory[PATH_MAX];
+    char config_path[PATH_MAX];
+
+    build_path(config_home, sizeof(config_home), home, ".config");
+    build_path(
+        config_directory,
+        sizeof(config_directory),
+        config_home,
+        "eye_reminder"
+    );
+    build_path(config_path, sizeof(config_path), config_directory, "config");
+
+    assert(mkdir(config_home, 0700) == 0);
+    assert(mkdir(config_directory, 0700) == 0);
+    assert(setenv("HOME", home, 1) == 0);
+    assert(unsetenv("XDG_CONFIG_HOME") == 0);
+
+    write_file_contents(
+        config_path,
+        "not-a-setting\ninterval=9\ninterval=10minutes\nunknown=value\n"
+    );
+    assert_config(load_config(), 60, MODE_POPUP);
+
+    write_file_contents(
+        config_path,
+        "interval=10\ninterval=broken\nignored-line\nmode=notification\n"
+    );
+    assert_config(load_config(), 10, MODE_NOTIFICATION);
+
+    assert(unlink(config_path) == 0);
+    assert(rmdir(config_directory) == 0);
+    assert(rmdir(config_home) == 0);
+    assert(rmdir(home) == 0);
+    free(home);
 }
 
 static void test_interval_boundaries(void) {
@@ -335,6 +394,8 @@ static void test_save_failures_are_reported_and_cleaned_up(void) {
 }
 
 int main(void) {
+    test_default_config_and_missing_file();
+    test_malformed_file_preserves_defaults_and_valid_values();
     test_interval_boundaries();
     test_malformed_and_out_of_range_intervals();
     test_conversion_rejects_invalid_values();
