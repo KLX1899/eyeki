@@ -9,7 +9,7 @@ EyeKi currently targets Linux desktops with systemd-logind. Development requires
 - A graphical test session and notification daemon for manual UI checks
 - system D-Bus and logind for idle behavior
 
-The preliminary Debian metadata names `libgtk-3-dev`, `libnotify-dev`, `libsystemd-dev`, `pkg-config`, and `debhelper-compat (= 13)`. Treat those as Debian-oriented package names, not a tested cross-distribution install command.
+The Debian metadata names `libgtk-3-dev`, `libnotify-dev`, `libsystemd-dev`, `pkg-config`, and `debhelper-compat (= 13)`. Treat those as Debian-oriented package names, not a tested cross-distribution install command.
 
 Confirm discovery before building:
 
@@ -49,7 +49,7 @@ find package-root -type f -print
 
 With default variables, staged paths correspond to `/usr/bin/eyeki` and `/usr/lib/systemd/user/eyeki.service`. Remove the disposable staging directory manually after inspection. The systemd unit's `ExecStart` is fixed to `/usr/bin/eyeki`, so changing `PREFIX` requires a matching unit change.
 
-Do not use `install.sh`. It compiles nonexistent `EyeKi.c`, creates an uppercase binary/unit, injects X11-specific environment values, and mutates the active user's service state.
+The Makefile is the only supported source-build installation path. Installation does not enable or start the user service; that remains an explicit per-user action. The Debian rules call the same install target and pass `--no-enable` to the systemd user-unit helper, so a fresh package installation also remains opt-in.
 
 ## Tests, linting, formatting, and type checking
 

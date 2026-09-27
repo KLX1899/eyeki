@@ -2,6 +2,9 @@ eyeki (0.1.0-1) UNRELEASED; urgency=medium
 
   * Prepare the first verifiable upstream pre-release.
   * Add an authoritative application version and --version command.
-  * Keep preliminary packaging unreleased until build and package checks pass.
+  * Reconcile the tracked Makefile, user unit, and Linux-only Debian metadata.
+  * Keep fresh user-service installation disabled until the user opts in.
+  * Remove the obsolete standalone installer.
+  * Keep the package unreleased pending the remaining release checks.
 
- -- KLX1899 <amirmkalaki@gmail.com>  Wed, 19 Aug 2026 09:38:33 +0330
+ -- KLX1899 <amirmkalaki@gmail.com>  Sat, 26 Sep 2026 20:54:38 +0330

@@ -4,27 +4,28 @@ The first public-release target is Ubuntu. The intended end-user experience is a
 
 ## Readiness assessment
 
-EyeKi is not ready for a public binary release or submission to a distribution repository. The source is pre-release, has no CI or Git tags, and still contains P0 clean-build/test, CI, and packaging defects. Packaging work exists but was untracked or ignored at the documentation audit.
+EyeKi is not ready for a public binary release or submission to a distribution repository. The source is pre-release, has no CI or Git tags, and still contains P0 automated-testing and CI gaps. The tracked packaging sources provide a reviewable build baseline, not a published or production-ready package.
 
 ## Current packaging capability
 
 - `Makefile` builds `eyeki` and can install/stage it under `/usr/bin` plus `eyeki.service` under `/usr/lib/systemd/user` by default.
 - `eyeki.service` runs the foreground loop as a systemd user service and restarts failures.
-- `debian/` contains preliminary debhelper 13 control, rules, install, copyright, and changelog files.
-- `install.sh` is obsolete and nonfunctional against current lowercase source names; it also makes unreviewed user-service/environment changes.
+- `debian/` contains tracked debhelper 13 control, rules, copyright, and changelog files. Debhelper delegates build, test, and installation to the authoritative Makefile.
+- Source installation is intentionally provided only through the Makefile. It installs but does not enable or start the user service. Debian packaging also leaves a fresh user-service install disabled while preserving an existing enabled state across upgrades.
 - `eyeki_1.0.orig.tar.gz` is not a valid release source artifact: it has no versioned top-level directory, contains an x86-64 binary, embeds owner/timestamp metadata, and includes a zero-byte entry for itself.
 - Branch names suggest APT/Snap exploration, but no Snap manifest or functional Snap packaging exists. A branch name is not release support.
 
 The Makefile's pkg-config dependency was corrected during the documentation audit from `dbus-1` to `libsystemd`, matching the `sd-bus` API used by source. A disposable GCC 15/Make and extracted dependency setup compiled the full application without warnings on 2026-08-20, but a clean supported-baseline build and CI still need verification.
 
+On 2026-09-26, a clean export containing only tracked sources plus the packaging reconciliation built the `0.1.0-1` amd64 binary package with Ubuntu 26.04 package metadata in a disposable dependency root. Debhelper applied its hardening flags, ran all seven unit suites, installed the expected binary and user unit, and resolved runtime dependencies. Lintian reported only the expected unreleased-initial-upload issue warning and the still-missing manual page; installation, upgrade, removal, and supported-desktop behavior were not exercised in a VM.
+
 ## Missing or inconsistent release metadata
 
 - The authoritative development version is `0.1.0` in `src/version.h` and is exposed by `eyeki --version`, but there is no verified release tag or release record yet.
-- The ignored archive labeled `1.0` is stale and must not be treated as a release artifact. Preliminary Debian metadata now maps the development version to unreleased package revision `0.1.0-1`.
-- Debian copyright attribution differs from the root license and contains an abbreviated license stanza; maintainers must reconcile it without rewriting valid legal history.
-- No supported-platform/minimum-version matrix, icon, desktop/AppStream metadata, screenshots, release notes history, changelog tags, SBOM, checksums, signatures, provenance, or asset attribution inventory.
+- The ignored archive labeled `1.0` is stale and must not be treated as a release artifact. Tracked Debian metadata maps the development version to unreleased package revision `0.1.0-1`.
+- No supported-platform/minimum-version matrix, manual page, icon, desktop/AppStream metadata, screenshots, release notes history, changelog tags, SBOM, checksums, signatures, provenance, or asset attribution inventory.
 - No dependency minimum versions or documented third-party license review.
-- No CI/release workflow, clean-checkout build evidence, reproducibility process, or vulnerability scan.
+- No CI/release workflow, clean supported-platform build matrix, reproducibility process, or vulnerability scan.
 
 Because EyeKi is primarily a background user service rather than a conventional launcher-driven GUI, desktop/AppStream metadata requirements depend on the chosen repository and presentation model. Verify each target's current policy externally before submission.
 
@@ -69,10 +70,9 @@ No runtime updater exists. Initially, updates should be delivered by the chosen 
 
 ### Debian-family source package
 
-The existing debhelper metadata is a starting point, not a passing package. Before using it:
+The existing debhelper metadata is a buildable baseline, not a release-ready package. Before publishing it:
 
-- track and validate every `debian/` file from a clean source tree;
-- use an authoritative upstream version/tarball and consistent copyright data;
+- generate and verify an authoritative upstream source artifact from a tagged tree;
 - build with the declared dependency set and run current Debian policy/lint tools;
 - verify user-service install/enable expectations—packages generally should not surprise-enable per-user services;
 - add tests, hardening flags, watch/upstream metadata as appropriate, and complete long description/claims;

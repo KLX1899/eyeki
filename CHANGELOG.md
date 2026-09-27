@@ -29,6 +29,7 @@ All notable changes should be documented here. The format follows Keep a Changel
 - Replaced the popup's nested event loop with non-blocking daemon-loop servicing; button/keyboard acknowledgement, window-manager close, mode changes, and process termination now close it predictably.
 - Corrected the Makefile's D-Bus provider from `dbus-1` to `libsystemd`, matching the source's `sd-bus` API.
 - Updated ignore rules so source packaging metadata can be tracked while build binaries and generated source archives remain ignored.
+- Reconciled the tracked Makefile, user unit, and Linux-only Debian metadata around lowercase paths, version `0.1.0`, license attribution, evidenced platform claims, and opt-in user-service enablement; removed the obsolete standalone installer.
 
 ## Release history
 

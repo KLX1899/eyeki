@@ -12,12 +12,12 @@ This roadmap is evidence-based planning guidance, not a commitment or release sc
 | Reliability — resolve the current user's active logind session | P0 | 2026-08-21 | Effective-UID ownership and active/local/graphical/user-class eligibility; process-session then primary-display precedence; unique fallback; multi-session, ambiguity, empty, and error regressions. |
 | Notifications — initialize both selectable backends safely and surface failures | P0 | 2026-09-26 | Each selected backend is checked before startup/reload activation; both live transition directions and initialization failures have desktop-independent regressions; notification delivery failures are reported and retry only after the normal interval. |
 | User experience/accessibility — handle popup close and non-blocking lifecycle | P0 | 2026-09-26 | Popup GTK work is serviced by the daemon loop; acknowledgement, WM close, mode-change, SIGINT/SIGTERM, and missing-display paths have defined outcomes, with desktop-independent lifecycle regressions. |
+| Packaging — reconcile/track Makefile, user unit, Debian files, and installer | P0 | 2026-09-26 | Authoritative lowercase build, staged-install, service, and Debian sources are tracked and aligned on version, paths, dependencies, license, and platform claims; a clean tracked-tree export built `0.1.0-1` and ran all tests; fresh package installs leave the user unit disabled; the stale installer was removed and generated artifacts remain ignored. |
 
 ## Existing incomplete work
 
 | Area and item | Motivation | Priority | Dependencies | Acceptance criteria |
 | --- | --- | --- | --- | --- |
-| Packaging — reconcile/track Makefile, user unit, Debian files, and installer | Packaging files were untracked/ignored; installer is stale; source archive is malformed | P0 | Version and supported-platform decisions | Authoritative tracked files build/package from clean checkout; stale installer removed or replaced in a reviewed change |
 | Localization — replace hard-coded interval-specific Persian copy | Messages always say one hour and cannot be translated | P1 | Locale/fallback decision | Message reflects configured interval; strings are extractable; Persian RTL and fallback locale tested |
 
 ## Recommended short-term work

@@ -40,7 +40,7 @@ flowchart LR
 | `src/scheduler.c` / `src/scheduler.h` | Accumulate monotonic active time, reset on idle/unknown state, and report threshold crossing | Receives ten-second activity samples |
 | `Makefile` | Compile with GTK/libnotify/libsystemd; run desktop-independent unit tests; install binary and unit | No debug/lint/package targets |
 | `eyeki.service` | Run `/usr/bin/eyeki --daemon` as a user service and restart failures | Fixed installed path; no hardening or graphical-session binding beyond ordering |
-| `debian/` | Preliminary Debian source-package metadata | Unverified, incomplete, and version/attribution review required |
+| `debian/` | Build the unreleased Linux package through debhelper and the authoritative Makefile; keep fresh user-unit enablement opt-in | Release policy, source-artifact, remaining lint, and install/upgrade testing remain |
 
 ## Application lifecycle
 

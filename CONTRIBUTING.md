@@ -24,7 +24,7 @@ make
 ./eyeki --help
 ```
 
-Use [the disposable-home workflow](docs/DEVELOPMENT.md#safe-configuration-validation) for setting tests. Do not use `install.sh`.
+Use [the disposable-home workflow](docs/DEVELOPMENT.md#safe-configuration-validation) for setting tests. Use the Makefile for source builds and installation.
 
 ## Branches and commits
 

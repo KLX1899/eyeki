@@ -9,11 +9,11 @@ Build-Depends:
   libgtk-3-dev,
   pkg-config
 Standards-Version: 4.7.0
-Homepage: https://github.com/KLX1899/eyeki
+Homepage: https://github.com/KLX1899/EyeKi
 Rules-Requires-Root: no
 
 Package: eyeki
-Architecture: any
+Architecture: linux-any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Eye drop reminder daemon for Linux
  EyeKi is a lightweight daemon that reminds users to use eye drops
@@ -23,5 +23,4 @@ Description: Eye drop reminder daemon for Linux
  Features:
   - Configurable reminder intervals
   - Two display modes: notification or GTK popup
-  - Wayland compatible
   - Systemd user service integration

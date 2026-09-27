@@ -2,7 +2,7 @@
 
 EyeKi is a small Linux reminder daemon that counts active session time and prompts the user to apply eye drops. It can send a desktop notification or display a fullscreen GTK popup.
 
-> **Status:** early, pre-release prototype. Core scheduling, configuration, reload, presentation-lifecycle, and session-selection unit tests exist, but there are no verifiable tagged releases, CI workflows, or production-ready packages. Localization and packaging need work before general distribution. See the [roadmap](docs/ROADMAP.md).
+> **Status:** early, pre-release prototype. Core scheduling, configuration, reload, presentation-lifecycle, and session-selection unit tests exist, but there are no verifiable tagged releases, CI workflows, or production-ready packages. Localization and release validation remain before general distribution. See the [roadmap](docs/ROADMAP.md).
 
 EyeKi only provides configurable reminders; the repository contains no clinical validation or medical guidance. Users should choose an interval appropriate to guidance from their healthcare professional.
 
@@ -15,7 +15,7 @@ EyeKi only provides configurable reminders; the repository contains no clinical 
 - Observes atomic settings replacements with inotify and restarts active-time counting from zero under the complete new configuration.
 - Initializes a presentation backend before activating its mode, including live mode changes, and reports initialization or notification-delivery failures.
 - Provides command-line operations to show and change those settings.
-- Includes a systemd user unit and preliminary Debian packaging metadata.
+- Includes a systemd user unit and tracked metadata for an unreleased Debian package.
 
 Notification and popup are intentionally mutually exclusive modes (XOR), not capabilities intended to be combined. Notification is the gentler prompt; popup is the stronger acknowledgement flow. The `--daemon` option runs the same foreground loop as starting without arguments—it does not fork or detach.
 
@@ -45,7 +45,7 @@ The intended Ubuntu release must be ready to use through one package-manager com
 - libsystemd development files (`libsystemd`)
 - At runtime: a notification service for notification mode and an available GTK display for popup mode
 
-The preliminary Debian metadata names `libgtk-3-dev`, `libnotify-dev`, `libsystemd-dev`, `pkg-config`, and debhelper as build dependencies. Package names differ across distributions.
+The Debian metadata names `libgtk-3-dev`, `libnotify-dev`, `libsystemd-dev`, `pkg-config`, and debhelper as build dependencies. Package names differ across distributions.
 
 ## Build and run
 
@@ -70,7 +70,7 @@ systemctl --user daemon-reload
 systemctl --user enable --now eyeki.service
 ```
 
-This installs the binary under `/usr/bin` and the user unit under `/usr/lib/systemd/user` with the default Makefile settings. For development, run the binary directly instead of installing it. The existing `install.sh` is stale—it refers to a nonexistent uppercase source filename and should not be used.
+This installs the binary under `/usr/bin` and the user unit under `/usr/lib/systemd/user` with the default Makefile settings. It does not enable or start the user service. For development, run the binary directly instead of installing it. The Makefile is the only supported source-build installation path.
 
 See [Development](docs/DEVELOPMENT.md) for setup, diagnostics, safe manual validation, and the exact limitations of the current toolchain.
 
@@ -120,7 +120,7 @@ The source contains no network client or telemetry. It stores only the interval 
 - Current-session resolution and idle queries still depend on systemd-logind metadata and have not been manually verified across the intended Ubuntu desktop/session matrix; missing, ambiguous, or failed lookups reset progress until resolution recovers.
 - Notification initialization/delivery errors are reported, but configuration-read/parse errors are ignored and concurrent one-shot settings changes can still overwrite one another's fields.
 - Accessibility, right-to-left layout, translations, and Wayland behavior are untested.
-- Debian packaging, the source archive, and the systemd integration are preliminary.
+- Debian packaging remains unreleased; the generated source archive and systemd integration still need release-level and supported-desktop validation.
 
 ## Project documentation
 

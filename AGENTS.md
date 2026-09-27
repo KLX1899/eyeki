@@ -17,8 +17,7 @@ Operational instructions for AI coding agents working in this repository. Read t
 - `tests/` — desktop-independent scheduler, configuration, reload, watch, and session-selection regression tests.
 - `Makefile` — build plus staged/system installation; output is `eyeki`.
 - `eyeki.service` — systemd user unit expecting `/usr/bin/eyeki`.
-- `install.sh` — stale installer; do not run or use as authoritative guidance.
-- `debian/` — preliminary Debian metadata; not release-ready.
+- `debian/` — tracked Debian metadata for the unreleased `0.1.0-1` package.
 - `README.md`, `docs/`, `CONTRIBUTING.md`, `SECURITY.md` — user, contributor, architecture, policy, and release documentation.
 - `.github/` — GitHub issue and pull-request templates.
 - `EyeKi` and `*.orig.tar.gz` — local/generated artifacts; never edit or commit them.
@@ -106,7 +105,7 @@ At the 2026-08-14 documentation audit, the existing ignored x86-64 binary succes
 
 - Current support boundary is Linux + systemd-logind + graphical desktop. Do not claim generic Unix, Windows, macOS, or verified Wayland support.
 - Keep the Makefile, `eyeki.service`, Debian metadata, README, and release guide consistent on paths, dependencies, and version.
-- `install.sh` references obsolete uppercase paths and must remain unused until deliberately redesigned.
+- Keep the Makefile as the single authoritative source-build and installation path; do not add a second installer without a reviewed lifecycle design.
 
 ## Security, privacy, and generated files
 

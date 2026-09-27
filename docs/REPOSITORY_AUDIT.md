@@ -6,7 +6,7 @@ This snapshot records evidence found during the 2026-08-14 documentation audit. 
 
 The committed history contained only `.gitignore`, `LICENSE`, `README.md`, `config.h`, and `eyeki.c`. The worktree also contained an untracked Makefile, installer, generated source archive, and ignored compiled binary, systemd unit, and `debian/` directory. There were no tests, CI workflows, assets, scripts beyond the installer, localization files, lock files, release tags, or nested contributor/agent instructions.
 
-The ignore file incorrectly hid the systemd unit and Debian source metadata and did not ignore the lowercase Makefile output. This audit changed it to ignore only project binaries and generated `*.orig.tar.gz` archives. Packaging source files now appear to Git and should be reviewed before being committed.
+The ignore file incorrectly hid the systemd unit and Debian source metadata and did not ignore the lowercase Makefile output. This audit changed it to ignore only project binaries and generated `*.orig.tar.gz` archives. The authoritative Makefile, unit, and Debian metadata are now tracked; the obsolete standalone installer was removed during the packaging reconciliation.
 
 ## Hygiene findings
 
@@ -18,12 +18,12 @@ The ignore file incorrectly hid the systemd unit and Debian source metadata and 
 | Potential secrets | Pattern/repository review found no obvious credentials in tracked application files | Add automated secret scanning; never treat this as exhaustive |
 | Personal data | Preliminary Debian metadata contains maintainer identity/contact data | Maintainer must confirm it is intended for public packaging; do not copy it elsewhere |
 | Ignore rules | Generic C ignores were mostly reasonable; project source packaging was hidden and lowercase output missing | Corrected during audit |
-| License | Root MIT license is unambiguous; Debian copyright has different attribution and an incomplete MIT stanza | Reconcile before packaging; preserve valid legal attribution/history |
+| License | Root MIT license is unambiguous; Debian copyright initially had different attribution and an incomplete MIT stanza | Resolved: Debian metadata now matches the root attribution and complete MIT text |
 | Lock files | None; dependencies are native system libraries discovered by `pkg-config` | Expected for this build style, but define/test minimum versions and review advisories |
 | Generated files | Binary and source archive are generated; no generated source/catalogs | Documented as non-editable/non-committable |
 | Versions | Authoritative development version `0.1.0` exists, but no verified tag/release exists; the ignored `1.0` archive is stale | Keep source, CLI, package revision, tag, and release metadata synchronized |
 | Documentation links | Old README described compile-time configuration and omitted actual behavior/setup | Replaced with source-backed docs; custom link check required until CI exists |
-| Stale files/comments | `install.sh` uses nonexistent uppercase source/binary/unit; Debian claims CLI/Wayland support more strongly than evidence; some source comments overstate fallback/continuous activity | Installer/source left unchanged; claims flagged for focused fixes |
+| Stale files/comments | `install.sh` used nonexistent uppercase source/binary/unit; Debian claimed Wayland support more strongly than evidence; some source comments overstate fallback/continuous activity | Packaging portion resolved: obsolete installer removed and unsupported package claim dropped; source-comment review remains separate |
 | Asset attribution | No bundled visual/audio/font assets found | Add inventory/attribution when assets appear |
 
 ## Architecture and maintenance risks
@@ -57,3 +57,7 @@ EyeKi now checks `notify_init()`, `notify_notification_show()`, and `gtk_init_ch
 - The daemon, popup, notification delivery, logind behavior, source build, install, Debian package, and source reproducibility were not executed/validated.
 
 See the final working-tree diff and current command output rather than relying on this historical snapshot after subsequent changes.
+
+## Packaging reconciliation evidence
+
+On 2026-09-26, the authoritative tracked Makefile, user unit, and Debian metadata were reconciled. A clean tracked-tree export built the `0.1.0-1` amd64 binary package with disposable Ubuntu 26.04 dependencies; debhelper ran all unit suites, staged the expected lowercase paths, and left fresh user-unit enablement opt-in. Lintian reported the remaining initial-upload issue-closure and missing-manual-page warnings. The obsolete installer was removed, while the ignored legacy binary and malformed archive remained unmodified and outside the package.
