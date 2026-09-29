@@ -39,6 +39,7 @@ flowchart LR
 | `src/runtime.c` / `src/runtime.h` | Install a complete configuration with its monotonic scheduler state and reset elapsed time on reload | Caller must prepare the selected presentation backend before installation |
 | `src/scheduler.c` / `src/scheduler.h` | Accumulate monotonic active time, reset on idle/unknown state, and report threshold crossing | Receives ten-second activity samples |
 | `Makefile` | Compile with GTK/libnotify/libsystemd; run desktop-independent unit tests; install binary and unit | No debug/lint/package targets |
+| `.github/workflows/ci.yml` | Install dependencies and run warning-clean builds, tests, link checks, CLI smoke checks, staged installation, and repository hygiene on Ubuntu 24.04 | Source-build evidence only; no graphical desktop integration |
 | `eyeki.service` | Run `/usr/bin/eyeki --daemon` as a user service and restart failures | Fixed installed path; no hardening or graphical-session binding beyond ordering |
 | `debian/` | Build the unreleased Linux package through debhelper and the authoritative Makefile; keep fresh user-unit enablement opt-in | Release policy, source-artifact, remaining lint, and install/upgrade testing remain |
 

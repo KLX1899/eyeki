@@ -4,7 +4,7 @@ The first public-release target is Ubuntu. The intended end-user experience is a
 
 ## Readiness assessment
 
-EyeKi is not ready for a public binary release or submission to a distribution repository. The source is pre-release, has no CI or Git tags, and still contains P0 automated-testing and CI gaps. The tracked packaging sources provide a reviewable build baseline, not a published or production-ready package.
+EyeKi is not ready for a public binary release or submission to a distribution repository. The source is pre-release and has no Git tags, release automation, supported desktop matrix, or release-level install/upgrade evidence. The tracked CI and packaging sources provide reviewable build baselines, not a published or production-ready package.
 
 ## Current packaging capability
 
@@ -15,7 +15,7 @@ EyeKi is not ready for a public binary release or submission to a distribution r
 - `eyeki_1.0.orig.tar.gz` is not a valid release source artifact: it has no versioned top-level directory, contains an x86-64 binary, embeds owner/timestamp metadata, and includes a zero-byte entry for itself.
 - Branch names suggest APT/Snap exploration, but no Snap manifest or functional Snap packaging exists. A branch name is not release support.
 
-The Makefile's pkg-config dependency was corrected during the documentation audit from `dbus-1` to `libsystemd`, matching the `sd-bus` API used by source. A disposable GCC 15/Make and extracted dependency setup compiled the full application without warnings on 2026-08-20, but a clean supported-baseline build and CI still need verification.
+The Makefile's pkg-config dependency was corrected during the documentation audit from `dbus-1` to `libsystemd`, matching the `sd-bus` API used by source. A disposable GCC 15/Make and extracted dependency setup compiled the full application without warnings on 2026-08-20. The tracked GitHub Actions workflow now defines Ubuntu 24.04 x86-64 as the fixed source-build baseline, installs the declared dependencies, treats warnings as errors, and runs tests, link checks, CLI smoke checks, staged installation, and repository-hygiene checks. Graphical desktop behavior remains outside that CI evidence.
 
 On 2026-09-26, a clean export containing only tracked sources plus the packaging reconciliation built the `0.1.0-1` amd64 binary package with Ubuntu 26.04 package metadata in a disposable dependency root. Debhelper applied its hardening flags, ran all seven unit suites, installed the expected binary and user unit, and resolved runtime dependencies. Lintian reported only the expected unreleased-initial-upload issue warning and the still-missing manual page; installation, upgrade, removal, and supported-desktop behavior were not exercised in a VM.
 
@@ -25,7 +25,7 @@ On 2026-09-26, a clean export containing only tracked sources plus the packaging
 - The ignored archive labeled `1.0` is stale and must not be treated as a release artifact. Tracked Debian metadata maps the development version to unreleased package revision `0.1.0-1`.
 - No supported-platform/minimum-version matrix, manual page, icon, desktop/AppStream metadata, screenshots, release notes history, changelog tags, SBOM, checksums, signatures, provenance, or asset attribution inventory.
 - No dependency minimum versions or documented third-party license review.
-- No CI/release workflow, clean supported-platform build matrix, reproducibility process, or vulnerability scan.
+- No release workflow, minimum/current dependency matrix, reproducibility process, or vulnerability scan; CI currently covers one fixed source-build baseline.
 
 Because EyeKi is primarily a background user service rather than a conventional launcher-driven GUI, desktop/AppStream metadata requirements depend on the chosen repository and presentation model. Verify each target's current policy externally before submission.
 
@@ -101,13 +101,13 @@ macOS and Windows packages are out of scope until native replacements exist for 
 - The root `LICENSE` is MIT and unambiguous. Confirm all source/packaging attribution and inspect actual dependency/bundled-asset licenses before distribution; do not assume compatibility from package names.
 - No bundled image/font/audio assets currently require attribution. Add an inventory when assets are introduced.
 
-## Suggested CI/CD workflow
+## CI/CD workflow and remaining release automation
 
-1. **Pull requests:** secret scan, repository hygiene/link check, dependency install, warning-clean build, unit tests, static analysis, and staged-install verification.
+1. **Pull requests:** the current Ubuntu 24.04 workflow performs repository hygiene/local-link checks, dependency installation, a warning-clean build, unit tests, CLI smoke checks, and staged-install verification. Secret scanning and static analysis remain future work.
 2. **Scheduled:** supported dependency/platform matrix plus vulnerability/advisory review.
 3. **Tag candidate:** require clean tree and matching version/changelog; build source archive and packages in isolated pinned environments; run package linters and VM smoke tests.
 4. **Approval gate:** maintainer reviews test evidence, permissions, SBOM/licenses, checksums, and release notes.
 5. **Publish:** sign and upload immutable artifacts, then submit/publish packages; never rebuild under the same version.
 6. **Post-release:** verify downloads/signatures, monitor regressions/security reports, and document rollback/yank policy.
 
-Exact CI provider and repository upload credentials remain maintainer decisions. Use least-privilege short-lived credentials and protected environments.
+GitHub Actions is the current source-build CI provider. Release publication, repository upload credentials, and approval environments remain maintainer decisions. Use least-privilege short-lived credentials and protected environments.

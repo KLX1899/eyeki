@@ -35,11 +35,13 @@ Record an assumption before relying on it. Use: `Assumption: … Evidence: … R
 pkg-config --modversion gtk+-3.0 libnotify libsystemd
 make clean
 make
+make test
+python3 scripts/check_markdown_links.py
 ./eyeki --help
 ./eyeki --show-config
 ```
 
-There are desktop-independent unit-test targets, but no automated lint/format/doc target or CI. If a task adds one, update AGENTS, Development, Contributing, and CI in the same change. If a command cannot run, capture the exact blocker; do not substitute an older binary as a build pass.
+The Ubuntu 24.04 CI build baseline runs the full build and desktop-independent unit tests with `-Werror`, validates local Markdown links, stages installation, and checks repository hygiene. There is no automated lint, formatting, static-analysis, desktop-integration, or release target. If a command cannot run, capture the exact blocker; do not substitute an older binary as a build pass.
 
 ## Keep documentation synchronized
 

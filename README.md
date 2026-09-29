@@ -2,7 +2,7 @@
 
 EyeKi is a small Linux reminder daemon that counts active session time and prompts the user to apply eye drops. It can send a desktop notification or display a fullscreen GTK popup.
 
-> **Status:** early, pre-release prototype. Core scheduling, configuration, reload, presentation-lifecycle, and session-selection unit tests exist, but there are no verifiable tagged releases, CI workflows, or production-ready packages. Localization and release validation remain before general distribution. See the [roadmap](docs/ROADMAP.md).
+> **Status:** early, pre-release prototype. Core scheduling, configuration, reload, presentation-lifecycle, and session-selection unit tests run in CI, but there are no verifiable tagged releases or production-ready packages. Localization and release validation remain before general distribution. See the [roadmap](docs/ROADMAP.md).
 
 EyeKi only provides configurable reminders; the repository contains no clinical validation or medical guidance. Users should choose an interval appropriate to guidance from their healthcare professional.
 
@@ -57,7 +57,7 @@ make
 ./eyeki --daemon
 ```
 
-`make clean` removes the local `eyeki` build output. The build command is defined by the repository Makefile, but it is not yet exercised by CI.
+`make clean` removes the local `eyeki` build output. The build command is defined by the repository Makefile and is exercised with warnings treated as errors on the fixed Ubuntu 24.04 CI build baseline. That baseline verifies source compilation and tests; it does not establish desktop-runtime support.
 
 `make test` builds and runs the desktop-independent scheduler, runtime reload, config-watch, interval/config-persistence, presentation-readiness, popup/process-lifecycle, and logind session-selection unit tests.
 
@@ -107,7 +107,7 @@ Persian is the initial product language. The current messages are hard-coded and
 - **Popup cannot open:** start EyeKi inside the intended graphical session and check the display environment. EyeKi reports a failed GTK display initialization and exits instead of activating popup mode.
 - **The timer reports no or ambiguous graphical session:** run EyeKi as the intended desktop user. A directly launched process uses its own eligible login session; the user service prefers logind's primary display session and otherwise requires one unambiguous active local graphical session. Lookup failures and unresolved states reset progress.
 - **Service loops or fails:** use `systemctl --user status eyeki.service` and `journalctl --user -u eyeki.service`; the unit restarts failures after five seconds.
-- **Build dependency errors:** verify all three `pkg-config` modules with `pkg-config --modversion gtk+-3.0 libnotify libsystemd`.
+- **`make` reports missing build dependencies:** on Ubuntu 24.04, install `build-essential`, `pkg-config`, `libgtk-3-dev`, `libnotify-dev`, and `libsystemd-dev`, then verify all three modules with `pkg-config --modversion gtk+-3.0 libnotify libsystemd`. Package names differ on other distributions.
 
 ## Privacy and security
 
@@ -115,7 +115,7 @@ The source contains no network client or telemetry. It stores only the interval 
 
 ## Known limitations
 
-- Scheduler, runtime reload, config-watch, interval/config-persistence, presentation-readiness, popup/process-lifecycle, and session-selection unit tests exist, but there is no broader automated coverage, linting, formatting check, CI, or verified release process.
+- CI builds and runs the scheduler, runtime reload, config-watch, interval/config-persistence, presentation-readiness, popup/process-lifecycle, and session-selection unit tests on Ubuntu 24.04, but there is no desktop integration suite, static analysis, formatting check, multi-baseline matrix, or verified release process.
 - Invalid persisted interval values are ignored so they cannot replace the default or a preceding valid value; other malformed configuration fields are not diagnosed.
 - Current-session resolution and idle queries still depend on systemd-logind metadata and have not been manually verified across the intended Ubuntu desktop/session matrix; missing, ambiguous, or failed lookups reset progress until resolution recovers.
 - Notification initialization/delivery errors are reported, but configuration-read/parse errors are ignored and concurrent one-shot settings changes can still overwrite one another's fields.

@@ -51,9 +51,12 @@ Desktop-independent scheduler, configuration, activity-selection, presentation, 
 make clean
 make
 make test
+python3 scripts/check_markdown_links.py
 ./eyeki --help
 ./eyeki --show-config
 ```
+
+Pull requests and pushes run the same full build and unit suites with warnings treated as errors on the fixed Ubuntu 24.04 CI build baseline. CI also checks repository-local Markdown links, stages the default installation paths, rejects tracked files covered by `.gitignore`, and verifies cleanup leaves no generated files. This is source-build evidence, not desktop-runtime support evidence.
 
 Use isolated configuration and a real desktop session for changes to reminders. Timer changes should cover threshold, idle/resume, invalid values, clock behavior, reload/restart behavior, and D-Bus failure. Notification/popup changes should cover initialization failure, dismissal/close, keyboard use, focus, scaling, and each claimed desktop/display server.
 

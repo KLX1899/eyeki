@@ -22,7 +22,7 @@ The ignore file incorrectly hid the systemd unit and Debian source metadata and 
 | Lock files | None; dependencies are native system libraries discovered by `pkg-config` | Expected for this build style, but define/test minimum versions and review advisories |
 | Generated files | Binary and source archive are generated; no generated source/catalogs | Documented as non-editable/non-committable |
 | Versions | Authoritative development version `0.1.0` exists, but no verified tag/release exists; the ignored `1.0` archive is stale | Keep source, CLI, package revision, tag, and release metadata synchronized |
-| Documentation links | Old README described compile-time configuration and omitted actual behavior/setup | Replaced with source-backed docs; custom link check required until CI exists |
+| Documentation links | Old README described compile-time configuration and omitted actual behavior/setup | Replaced with source-backed docs; repository-local targets and heading anchors are checked in CI |
 | Stale files/comments | `install.sh` used nonexistent uppercase source/binary/unit; Debian claimed Wayland support more strongly than evidence; some source comments overstate fallback/continuous activity | Packaging portion resolved: obsolete installer removed and unsupported package claim dropped; source-comment review remains separate |
 | Asset attribution | No bundled visual/audio/font assets found | Add inventory/attribution when assets appear |
 
@@ -61,3 +61,7 @@ See the final working-tree diff and current command output rather than relying o
 ## Packaging reconciliation evidence
 
 On 2026-09-26, the authoritative tracked Makefile, user unit, and Debian metadata were reconciled. A clean tracked-tree export built the `0.1.0-1` amd64 binary package with disposable Ubuntu 26.04 dependencies; debhelper ran all unit suites, staged the expected lowercase paths, and left fresh user-unit enablement opt-in. Lintian reported the remaining initial-upload issue-closure and missing-manual-page warnings. The obsolete installer was removed, while the ignored legacy binary and malformed archive remained unmodified and outside the package.
+
+## CI baseline
+
+On 2026-09-27, a GitHub Actions workflow was added for a fixed Ubuntu 24.04 x86-64 source-build baseline. It installs the declared native development dependencies, builds the application and every unit target with warnings treated as errors, runs one-shot CLI checks in a disposable home, validates staged installation, checks repository-local Markdown targets and anchors, rejects tracked files covered by `.gitignore`, and requires cleanup to leave no generated files. This build baseline does not replace supported-desktop notification, popup, logind, or display-server validation.

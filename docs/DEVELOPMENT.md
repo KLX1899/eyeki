@@ -11,6 +11,16 @@ EyeKi currently targets Linux desktops with systemd-logind. Development requires
 
 The Debian metadata names `libgtk-3-dev`, `libnotify-dev`, `libsystemd-dev`, `pkg-config`, and `debhelper-compat (= 13)`. Treat those as Debian-oriented package names, not a tested cross-distribution install command.
 
+CI uses a fixed Ubuntu 24.04 x86-64 source-build baseline and installs `build-essential`, `pkg-config`, `libgtk-3-dev`, `libnotify-dev`, `libsystemd-dev`, and Python 3. This baseline verifies compilation and desktop-independent behavior; it is not evidence that graphical reminder behavior works on a particular Ubuntu desktop or display server.
+
+On Ubuntu 24.04, install those source-build and repository-check dependencies with:
+
+```sh
+sudo apt-get update
+sudo apt-get install --no-install-recommends \
+  build-essential libgtk-3-dev libnotify-dev libsystemd-dev pkg-config python3
+```
+
 Confirm discovery before building:
 
 ```sh
@@ -28,7 +38,7 @@ make
 
 No-argument execution also enters the foreground daemon loop. Stop a development run with `Ctrl-C`. `make clean` removes the generated lowercase binary.
 
-The Makefile enables `-Wall -Wextra` and honors standard build variables such as `CC`, `CPPFLAGS`, `CFLAGS`, `LDFLAGS`, and `PKG_CONFIG`. It has no debug/release profiles.
+The Makefile enables `-Wall -Wextra` and honors standard build variables such as `CC`, `CPPFLAGS`, `CFLAGS`, `LDFLAGS`, and `PKG_CONFIG`. Building `eyeki` checks all required `pkg-config` modules first and stops with an Ubuntu package hint when any are unavailable. The desktop-independent `make test` target does not require those graphical/system integration development packages. The Makefile has no debug/release profiles.
 
 ## Repository layout
 
@@ -36,6 +46,8 @@ The Makefile enables `-Wall -Wextra` and honors standard build variables such as
 - `tests/` contains desktop-independent unit-test sources; `make test` builds their executables in the same directory and `make clean` removes them.
 - `docs/` contains project, architecture, development, privacy, and release guidance.
 - `debian/` and `eyeki.service` contain the preliminary platform-packaging metadata.
+- `.github/workflows/ci.yml` defines the fixed Ubuntu 24.04 build-and-test job.
+- `scripts/check_markdown_links.py` validates tracked repository-local Markdown links and heading anchors.
 - The root `Makefile` is the build, test, and installation entry point.
 
 ## Installation and packaging staging
@@ -53,13 +65,22 @@ The Makefile is the only supported source-build installation path. Installation 
 
 ## Tests, linting, formatting, and type checking
 
-`make test` builds and runs the desktop-independent scheduler, runtime reload, config-watch, interval/config-persistence, presentation-readiness, popup/process-lifecycle, and logind session-selection unit tests. Configuration coverage includes defaults, malformed persisted data, strict parsing, production boundaries, checked conversion, fresh-home creation, XDG precedence and legacy fallback, owner-only modes, atomic replacement, event observation, and failure cleanup/reporting. Runtime coverage verifies that interval and mode changes reset elapsed active time and that an invalid replacement cannot partially change state. Scheduler coverage includes exact threshold crossing, idle reset/resume, unknown-state reset, and backward-clock handling; shorter durations are injected directly rather than weakening production validation. Presentation coverage verifies startup preparation, both mode-transition directions, one-time initialization, and retry after initialization failure. Lifecycle coverage verifies each popup close reason and actual SIGINT/SIGTERM shutdown requests. Session-selection coverage verifies effective-UID ownership, process and primary-display precedence, local graphical eligibility, unique fallback, ambiguity, and distinct empty/error results. There is no linter configuration, formatter configuration, static-analysis target, broader integration suite, or CI workflow. C has no separate type-check command; compilation is the current type/syntax check. Do not report checks as passing unless they ran in the active environment.
+`make test` builds and runs the desktop-independent scheduler, runtime reload, config-watch, interval/config-persistence, presentation-readiness, popup/process-lifecycle, and logind session-selection unit tests. Configuration coverage includes defaults, malformed persisted data, strict parsing, production boundaries, checked conversion, fresh-home creation, XDG precedence and legacy fallback, owner-only modes, atomic replacement, event observation, and failure cleanup/reporting. Runtime coverage verifies that interval and mode changes reset elapsed active time and that an invalid replacement cannot partially change state. Scheduler coverage includes exact threshold crossing, idle reset/resume, unknown-state reset, and backward-clock handling; shorter durations are injected directly rather than weakening production validation. Presentation coverage verifies startup preparation, both mode-transition directions, one-time initialization, and retry after initialization failure. Lifecycle coverage verifies each popup close reason and actual SIGINT/SIGTERM shutdown requests. Session-selection coverage verifies effective-UID ownership, process and primary-display precedence, local graphical eligibility, unique fallback, ambiguity, and distinct empty/error results. There is no linter configuration, formatter configuration, static-analysis target, or broader integration suite. C has no separate type-check command; compilation is the current type/syntax check. Do not report checks as passing unless they ran in the active environment.
+
+The GitHub Actions workflow runs on pushes, pull requests, and manual dispatches. It discovers all three native dependencies, builds the application and unit tests with `-Werror`, runs every suite, exercises one-shot CLI commands in a disposable home, verifies the default staged installation paths, checks local Markdown links, and rejects both tracked ignored files and generated files left by the job. Its repository checks can be run locally with:
+
+```sh
+python3 scripts/check_markdown_links.py
+test -z "$(git ls-files -ci --exclude-standard)"
+```
 
 For every C change, run at least:
 
 ```sh
 make clean
 make
+make test
+python3 scripts/check_markdown_links.py
 ./eyeki --help
 ./eyeki --show-config
 ```
@@ -126,7 +147,7 @@ No EyeKi-specific environment variables exist.
 
 ## Common failures
 
-- **`pkg-config` cannot find a module:** install the matching development package and confirm the `.pc` search path.
+- **`pkg-config` cannot find a module:** on Ubuntu 24.04, install the prerequisite packages shown above; elsewhere, install the development package that provides the missing module and confirm the `.pc` search path.
 - **Undefined `sd_bus_*`:** confirm the Makefile requests and links `libsystemd`, not `dbus-1`.
 - **A setting command reports a filesystem error:** inspect ownership and permissions only for the disposable/active XDG config path; saves do not fall back to HOME when an absolute XDG override is selected.
 - **Changed settings appear stale:** confirm the daemon can watch the selected XDG/HOME path. A filesystem watch failure is reported through stderr/the user journal and terminates the process rather than continuing with stale settings.
@@ -138,6 +159,7 @@ No EyeKi-specific environment variables exist.
 
 - Linux and systemd-logind are hard dependencies of the current activity provider.
 - The bundled unit is a user service, not a system service.
+- Ubuntu 24.04 is the fixed CI source-build baseline; the supported graphical desktop/session matrix remains undecided and requires separate manual evidence.
 - Popup behavior must be verified separately on each claimed desktop environment and display server.
 - Sandboxed packages need deliberate system-bus and notification permissions; do not broaden access without review.
 - macOS and Windows require replacement activity, notification, lifecycle, and packaging adapters—not just conditional compilation.

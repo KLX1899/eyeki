@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Ubuntu 24.04 build and test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Install build dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes \
+            build-essential \
+            libgtk-3-dev \
+            libnotify-dev \
+            libsystemd-dev \
+            pkg-config \
+            python3
+
+      - name: Check repository links and tracked artifacts
+        shell: bash
+        run: |
+          python3 scripts/check_markdown_links.py
+
+          tracked_ignored="$(git ls-files -ci --exclude-standard)"
+          if [[ -n "$tracked_ignored" ]]; then
+            echo "Generated or ignored paths must not be tracked:" >&2
+            printf '%s\n' "$tracked_ignored" >&2
+            exit 1
+          fi
+
+      - name: Discover dependencies
+        run: pkg-config --modversion gtk+-3.0 libnotify libsystemd
+
+      - name: Build with warnings as errors
+        run: |
+          make clean
+          make CFLAGS="-Werror"
+
+      - name: Run unit tests with warnings as errors
+        run: make CFLAGS="-Werror" test
+
+      - name: Run one-shot CLI smoke tests
+        shell: bash
+        run: |
+          test_home="$(mktemp -d)"
+          trap 'rm -rf "$test_home"' EXIT
+          env HOME="$test_home" XDG_CONFIG_HOME= ./eyeki --help
+          env HOME="$test_home" XDG_CONFIG_HOME= ./eyeki --version
+          env HOME="$test_home" XDG_CONFIG_HOME= ./eyeki --show-config
+
+      - name: Verify staged installation
+        shell: bash
+        run: |
+          stage_root="$(mktemp -d)"
+          trap 'rm -rf "$stage_root"' EXIT
+          make DESTDIR="$stage_root" install
+          test -x "$stage_root/usr/bin/eyeki"
+          test -f "$stage_root/usr/lib/systemd/user/eyeki.service"
+          cmp eyeki.service "$stage_root/usr/lib/systemd/user/eyeki.service"
+
+      - name: Verify cleanup leaves no generated files
+        if: always()
+        shell: bash
+        run: |
+          make clean
+          git diff --exit-code
+
+          untracked="$(git ls-files --others --exclude-standard)"
+          if [[ -n "$untracked" ]]; then
+            echo "Build or checks left untracked files behind:" >&2
+            printf '%s\n' "$untracked" >&2
+            exit 1
+          fi
+
+          ignored="$(git ls-files --others --ignored --exclude-standard)"
+          if [[ -n "$ignored" ]]; then
+            echo "Build or checks left ignored generated files behind:" >&2
+            printf '%s\n' "$ignored" >&2
+            exit 1
+          fi

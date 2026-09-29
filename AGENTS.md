@@ -18,11 +18,13 @@ Operational instructions for AI coding agents working in this repository. Read t
 - `Makefile` — build plus staged/system installation; output is `eyeki`.
 - `eyeki.service` — systemd user unit expecting `/usr/bin/eyeki`.
 - `debian/` — tracked Debian metadata for the unreleased `0.1.0-1` package.
+- `.github/workflows/ci.yml` — Ubuntu 24.04 dependency, warning-clean build, test, link, staged-install, and repository-hygiene checks.
+- `scripts/check_markdown_links.py` — repository-local Markdown target and heading-anchor validation used by CI.
 - `README.md`, `docs/`, `CONTRIBUTING.md`, `SECURITY.md` — user, contributor, architecture, policy, and release documentation.
 - `.github/` — GitHub issue and pull-request templates.
 - `EyeKi` and `*.orig.tar.gz` — local/generated artifacts; never edit or commit them.
 
-There are no nested agent instructions, tests, CI workflows, localization catalogs, application assets, or dependency lock files.
+There are no nested agent instructions, localization catalogs, application assets, or dependency lock files.
 
 ## Architecture and data flow
 
@@ -47,6 +49,8 @@ Repository-defined workflow:
 ```sh
 pkg-config --modversion gtk+-3.0 libnotify libsystemd
 make
+make test
+python3 scripts/check_markdown_links.py
 ./eyeki --help
 ./eyeki --show-config
 ./eyeki --daemon
@@ -64,7 +68,7 @@ systemctl --user enable --now eyeki.service
 
 At the 2026-08-14 documentation audit, the existing ignored x86-64 binary successfully ran `--help`, default `--show-config`, valid setting updates when an isolated `$HOME/.config` existed, and invalid-option paths. The host lacked a compiler, Make, development `.pc` files, Debian tools, and documentation linters, so compilation and packaging were not executed. Never convert this historical result into a current pass claim; run commands in the active environment.
 
-`make test` runs scheduler, runtime, config-watch, interval/config-persistence, presentation-readiness, popup/process-lifecycle, and activity-session-selection unit tests. There are no configured lint, format, type-check, documentation-check, integration-test, or CI targets. Do not invent a passing check. For C changes, at minimum build with warnings enabled by the Makefile, run available unit tests, and manually exercise affected CLI/desktop behavior.
+`make test` runs scheduler, runtime, config-watch, interval/config-persistence, presentation-readiness, popup/process-lifecycle, and activity-session-selection unit tests. CI runs those suites and the full build with `-Werror` on a fixed Ubuntu 24.04 build baseline, validates repository-local Markdown links, stages installation, and rejects tracked ignored artifacts or generated files left after cleanup. There are no configured lint, format, static-analysis, broader integration-test, or release targets. Do not invent a passing check. For C changes, at minimum build with warnings enabled by the Makefile, run available unit tests, and manually exercise affected CLI/desktop behavior.
 
 ## Code conventions
 

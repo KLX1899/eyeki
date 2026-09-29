@@ -7,8 +7,9 @@ SYSTEMD_USER_DIR ?= $(PREFIX)/lib/systemd/user
 CC ?= gcc
 PKG_CONFIG ?= pkg-config
 
-PKG_CFLAGS := $(shell $(PKG_CONFIG) --cflags gtk+-3.0 libnotify libsystemd)
-PKG_LIBS := $(shell $(PKG_CONFIG) --libs gtk+-3.0 libnotify libsystemd)
+REQUIRED_PACKAGES = gtk+-3.0 libnotify libsystemd
+PKG_CFLAGS := $(shell $(PKG_CONFIG) --cflags $(REQUIRED_PACKAGES) 2>/dev/null)
+PKG_LIBS := $(shell $(PKG_CONFIG) --libs $(REQUIRED_PACKAGES) 2>/dev/null)
 
 override CFLAGS += -Wall -Wextra $(PKG_CFLAGS)
 
@@ -32,7 +33,15 @@ TEST_TARGETS = $(TEST_DIR)/test_scheduler $(TEST_DIR)/test_config \
 
 all: $(TARGET)
 
-$(TARGET): $(SOURCES) $(HEADERS)
+check-deps:
+	@if ! $(PKG_CONFIG) --exists $(REQUIRED_PACKAGES); then \
+		echo "Missing EyeKi build dependencies." >&2; \
+		$(PKG_CONFIG) --print-errors --exists $(REQUIRED_PACKAGES) 2>&1 || true; \
+		echo "Ubuntu 24.04: sudo apt-get install build-essential pkg-config libgtk-3-dev libnotify-dev libsystemd-dev" >&2; \
+		exit 1; \
+	fi
+
+$(TARGET): $(SOURCES) $(HEADERS) | check-deps
 	$(CC) $(CPPFLAGS) $(PROJECT_CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ \
 		$(SOURCES) $(PKG_LIBS)
 
@@ -97,4 +106,4 @@ $(TEST_DIR)/test_lifecycle: $(TEST_DIR)/test_lifecycle.c \
 	$(CC) $(CPPFLAGS) $(PROJECT_CPPFLAGS) $(CFLAGS) -o $@ \
 		$(TEST_DIR)/test_lifecycle.c $(SRC_DIR)/lifecycle.c
 
-.PHONY: all install uninstall clean test
+.PHONY: all check-deps install uninstall clean test

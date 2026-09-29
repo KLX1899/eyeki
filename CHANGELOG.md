@@ -15,6 +15,8 @@ All notable changes should be documented here. The format follows Keep a Changel
 - Desktop-independent lifecycle regressions for popup dismissal reasons and SIGINT/SIGTERM shutdown requests.
 - User, contributor, AI-agent, architecture, development, roadmap, privacy, security, release, and repository-audit documentation.
 - GitHub bug, feature, and pull-request templates.
+- A fixed Ubuntu 24.04 GitHub Actions workflow for dependency discovery, warning-clean builds and tests, one-shot CLI checks, staged installation, local-link validation, and generated-artifact hygiene.
+- A repository-local Markdown link and heading-anchor checker used by CI and available to contributors.
 
 ### Changed
 
@@ -28,6 +30,7 @@ All notable changes should be documented here. The format follows Keep a Changel
 - Changed presentation activation to initialize each backend on first selection, including live mode changes, and made initialization and notification-delivery failures diagnosable.
 - Replaced the popup's nested event loop with non-blocking daemon-loop servicing; button/keyboard acknowledgement, window-manager close, mode changes, and process termination now close it predictably.
 - Corrected the Makefile's D-Bus provider from `dbus-1` to `libsystemd`, matching the source's `sd-bus` API.
+- Changed application builds to stop before compilation with an actionable dependency diagnostic when required `pkg-config` modules are unavailable, while keeping desktop-independent tests runnable without them.
 - Updated ignore rules so source packaging metadata can be tracked while build binaries and generated source archives remain ignored.
 - Reconciled the tracked Makefile, user unit, and Linux-only Debian metadata around lowercase paths, version `0.1.0`, license attribution, evidenced platform claims, and opt-in user-service enablement; removed the obsolete standalone installer.
 

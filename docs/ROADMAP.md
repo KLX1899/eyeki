@@ -14,6 +14,7 @@ This roadmap is evidence-based planning guidance, not a commitment or release sc
 | User experience/accessibility — handle popup close and non-blocking lifecycle | P0 | 2026-09-26 | Popup GTK work is serviced by the daemon loop; acknowledgement, WM close, mode-change, SIGINT/SIGTERM, and missing-display paths have defined outcomes, with desktop-independent lifecycle regressions. |
 | Packaging — reconcile/track Makefile, user unit, Debian files, and installer | P0 | 2026-09-26 | Authoritative lowercase build, staged-install, service, and Debian sources are tracked and aligned on version, paths, dependencies, license, and platform claims; a clean tracked-tree export built `0.1.0-1` and ran all tests; fresh package installs leave the user unit disabled; the stale installer was removed and generated artifacts remain ignored. |
 | Testing — isolate config parser and scheduler with unit tests | P0 | 2026-09-27 | Desktop-independent config, scheduler, and runtime tests cover defaults, malformed persisted data, production ranges, threshold crossing, idle reset/resume, unknown-state reset, configuration reload, and backward-clock handling. |
+| CI/CD — build/test on a supported Linux baseline | P0 | 2026-09-28 | A fixed Ubuntu 24.04 x86-64 workflow installs declared dependencies, treats warnings as errors, runs all unit suites plus CLI and staged-install checks, validates repository-local Markdown links, and rejects tracked or leftover generated artifacts. Local application builds now fail before compilation with an actionable dependency diagnostic when required modules are missing. This is a source-build baseline, not graphical-desktop support evidence. |
 
 ## Existing incomplete work
 
@@ -25,7 +26,6 @@ This roadmap is evidence-based planning guidance, not a commitment or release sc
 
 | Area and item | Motivation | Priority | Dependencies | Acceptance criteria |
 | --- | --- | --- | --- | --- |
-| CI/CD — build/test on a supported Linux baseline | Clean-checkout build is not continuously verified | P0 | Tests and declared baseline | CI installs declared dependencies, builds with warnings as errors in CI, runs tests/link checks, and rejects generated artifacts |
 | Security/privacy — define private reporting channel and file permissions | Security contact is missing; config permissions depend on umask | P1 | Maintainer contact decision | `SECURITY.md` placeholder resolved; config/journal threat model tested; no unexpected data collection |
 | Notifications — define unknown/permission/failure states | D-Bus and notification failures currently look like success/activity | P1 | Confirmed reset-on-idle-lookup-failure policy | Idle lookup failure resets active time; recovery restarts from zero; user receives rate-limited actionable diagnostics; no failure causes reminder storms |
 | Settings — add safe service-aware update behavior | Concurrent CLI writes and daemon reload are unsynchronized | P1 | Atomic storage/reload | Concurrent updates do not lose fields; daemon observes a complete config under documented timing |
